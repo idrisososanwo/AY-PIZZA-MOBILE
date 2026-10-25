@@ -100,7 +100,11 @@ export const PaystackPaymentModal: React.FC<PaystackPaymentModalProps> = ({
 
     try {
       setVerifying(true);
-      const verifyResult = await paymentService.verifyPayment(reference);
+      const verifyResult = await paymentService.verifyPayment(
+        reference,
+        params?.orderId,
+        params?.receiptToken
+      );
 
       if (verifyResult.success) {
         onPaymentSuccess({

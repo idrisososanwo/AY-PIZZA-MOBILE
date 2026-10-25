@@ -99,7 +99,11 @@ export class PaystackProvider implements PaymentProvider {
   /**
    * Verifies transaction status independently with the backend.
    */
-  async verifyPayment(reference: string): Promise<PaymentVerificationResult> {
+  async verifyPayment(
+    reference: string,
+    orderId?: string,
+    receiptToken?: string
+  ): Promise<PaymentVerificationResult> {
     if (!reference || reference.trim().length === 0) {
       throw new Error('Transaction reference is required for verification.');
     }
@@ -107,7 +111,11 @@ export class PaystackProvider implements PaymentProvider {
     // Attempt backend verification via Supabase Edge Function
     try {
       const { data, error } = await supabase.functions.invoke('paystack-verify', {
-        body: { reference: reference.trim() },
+        body: {
+          reference: reference.trim(),
+          orderId: orderId?.trim(),
+          receiptToken: receiptToken?.trim(),
+        },
       });
 
       if (!error && data && data.success) {

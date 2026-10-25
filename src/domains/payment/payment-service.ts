@@ -31,8 +31,8 @@ export class PaymentService {
   /**
    * Independently verifies payment status with the backend.
    */
-  async verifyPayment(reference: string): Promise<PaymentVerificationResult> {
-    return this.provider.verifyPayment(reference);
+  async verifyPayment(reference: string, orderId?: string, receiptToken?: string): Promise<PaymentVerificationResult> {
+    return this.provider.verifyPayment(reference, orderId, receiptToken);
   }
 
   /**

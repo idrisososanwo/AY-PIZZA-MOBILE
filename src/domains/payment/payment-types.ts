@@ -45,5 +45,5 @@ export interface PaymentVerificationResult {
 export interface PaymentProvider {
   readonly gatewayName: string;
   initializePayment(params: PaymentInitializationParams): Promise<PaymentInitializationResult>;
-  verifyPayment(reference: string): Promise<PaymentVerificationResult>;
+  verifyPayment(reference: string, orderId?: string, receiptToken?: string): Promise<PaymentVerificationResult>;
 }
