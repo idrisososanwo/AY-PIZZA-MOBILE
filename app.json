@@ -7,11 +7,6 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "scheme": "aypizza",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#2b1a12"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "ng.aypizza.app"
@@ -35,6 +30,21 @@
       "expo-status-bar",
       "expo-secure-store",
       "expo-notifications"
-    ]
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "a0aaa783-3f92-4b05-b32f-e44ccc7bfd38"
+      }
+    },
+    "owner": "shinobi04",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/a0aaa783-3f92-4b05-b32f-e44ccc7bfd38"
+    }
   }
 }

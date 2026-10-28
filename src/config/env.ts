@@ -32,20 +32,23 @@ export const Config: AppConfig = {
 };
 
 /**
- * Validates that production configurations have non-placeholder credentials.
+ * Validates that production and staging configurations have non-placeholder credentials.
  */
-export const validateProductionConfig = (): { valid: boolean; errors: string[] } => {
+export const validateEnvironmentConfig = (): { valid: boolean; errors: string[] } => {
   const errors: string[] = [];
-  if (Config.isProduction) {
-    if (Config.supabaseUrl.includes('placeholder')) {
-      errors.push('EXPO_PUBLIC_SUPABASE_URL must be configured with a valid Supabase project URL.');
+  const isLiveEnv = Config.appEnv === 'production' || Config.appEnv === 'staging';
+  if (isLiveEnv) {
+    if (!rawSupabaseUrl || Config.supabaseUrl.includes('placeholder')) {
+      errors.push(`EXPO_PUBLIC_SUPABASE_URL must be configured with a valid Supabase project URL in ${Config.appEnv} mode.`);
     }
-    if (Config.supabaseAnonKey.includes('placeholder')) {
-      errors.push('EXPO_PUBLIC_SUPABASE_ANON_KEY must be configured with a valid Supabase anonymous key.');
+    if (!rawAnonKey || Config.supabaseAnonKey.includes('placeholder')) {
+      errors.push(`EXPO_PUBLIC_SUPABASE_ANON_KEY must be configured with a valid Supabase anonymous key in ${Config.appEnv} mode.`);
     }
-    if (Config.paystackPublicKey.includes('placeholder')) {
-      errors.push('EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY must be configured with a valid Paystack public key.');
+    if (!rawPaystackKey || Config.paystackPublicKey.includes('placeholder')) {
+      errors.push(`EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY must be configured with a valid Paystack public key in ${Config.appEnv} mode.`);
     }
   }
   return { valid: errors.length === 0, errors };
 };
+
+export const validateProductionConfig = validateEnvironmentConfig;

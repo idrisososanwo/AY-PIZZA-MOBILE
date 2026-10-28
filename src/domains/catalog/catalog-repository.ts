@@ -546,10 +546,11 @@ export class CatalogRepository {
    * Fetches active product categories, ordered by display_order.
    */
   async getCategories(): Promise<ProductCategory[]> {
-    if (Config.isProduction) {
+    const isLiveEnv = Config.isProduction || Config.appEnv === 'staging';
+    if (isLiveEnv) {
       if (!Config.supabaseUrl || Config.supabaseUrl.includes('placeholder')) {
         throw new Error(
-          'FATAL CONFIGURATION ERROR: Live Supabase database credentials must be configured in production. Fallback demo catalog is disabled in production.'
+          `FATAL CONFIGURATION ERROR: Live Supabase database credentials must be configured in ${Config.appEnv}. Fallback demo catalog is disabled in ${Config.appEnv}.`
         );
       }
     } else {
@@ -609,10 +610,11 @@ export class CatalogRepository {
     searchQuery?: string;
     includeUnavailable?: boolean;
   }): Promise<Product[]> {
-    if (Config.isProduction) {
+    const isLiveEnv = Config.isProduction || Config.appEnv === 'staging';
+    if (isLiveEnv) {
       if (!Config.supabaseUrl || Config.supabaseUrl.includes('placeholder')) {
         throw new Error(
-          'FATAL CONFIGURATION ERROR: Live Supabase database credentials must be configured in production. Fallback demo catalog is disabled in production.'
+          `FATAL CONFIGURATION ERROR: Live Supabase database credentials must be configured in ${Config.appEnv}. Fallback demo catalog is disabled in ${Config.appEnv}.`
         );
       }
     } else {
