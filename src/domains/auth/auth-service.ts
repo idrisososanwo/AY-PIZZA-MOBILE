@@ -1,8 +1,10 @@
 /**
  * Role-Based Access Control (RBAC) & Authentication Service
+ * AY Pizza — Official Mobile Application
  */
 
 import { UserRole } from '../../types/auth';
+import { CustomerProfile } from '../customer/customer-types';
 import { supabase } from '../../config/supabase';
 
 export const Permissions = {
@@ -91,6 +93,150 @@ export async function fetchAuthenticatedRole(): Promise<UserRole | null> {
 }
 
 /**
+ * Fetches the currently authenticated customer profile from the database.
+ */
+export async function fetchCurrentCustomerProfile(): Promise<CustomerProfile | null> {
+  try {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData?.user) {
+      return null;
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', authData.user.id)
+      .single();
+
+    const rawProfile = profile as any;
+    if (profileError || !rawProfile) {
+      return null;
+    }
+
+    return {
+      id: rawProfile.id,
+      fullName: rawProfile.full_name,
+      phone: rawProfile.phone,
+      email: rawProfile.email || authData.user.email || null,
+      role: rawProfile.role as UserRole,
+      avatarUrl: rawProfile.avatar_url,
+      isPhoneVerified: Boolean(rawProfile.is_phone_verified),
+      createdAt: rawProfile.created_at,
+      updatedAt: rawProfile.updated_at,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Customer Sign-Up with Email and Password
+ * Links new auth user with metadata (fullName, phone) which triggers
+ * `handle_new_user()` in PostgreSQL to create `public.profiles`.
+ */
+export async function signUpCustomer(
+  email: string,
+  password: string,
+  fullName: string,
+  phone: string
+): Promise<{ success: boolean; user?: any; error?: string }> {
+  try {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = fullName.trim();
+    const cleanPhone = phone.trim();
+
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return { success: false, error: 'A valid email address is required.' };
+    }
+    if (password.length < 6) {
+      return { success: false, error: 'Password must be at least 6 characters.' };
+    }
+    if (!cleanName) {
+      return { success: false, error: 'Full name is required.' };
+    }
+    if (cleanPhone.replace(/[^0-9]/g, '').length < 10) {
+      return { success: false, error: 'A valid phone number (at least 10 digits) is required.' };
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email: cleanEmail,
+      password,
+      options: {
+        data: {
+          full_name: cleanName,
+          phone: cleanPhone,
+        },
+      },
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, user: data.user };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Registration failed.' };
+  }
+}
+
+/**
+ * Customer Sign-In with Email and Password
+ */
+export async function signInCustomer(
+  email: string,
+  password: string
+): Promise<{ success: boolean; user?: any; error?: string }> {
+  try {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      return { success: false, error: 'Email address is required.' };
+    }
+    if (!password) {
+      return { success: false, error: 'Password is required.' };
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, user: data.user };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Login failed.' };
+  }
+}
+
+/**
+ * Sends a password reset email to the customer.
+ */
+export async function sendPasswordResetEmail(
+  email: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return { success: false, error: 'Please enter a valid email address.' };
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: 'aypizza://reset-password',
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Could not send recovery email.' };
+  }
+}
+
+/**
  * Subscribes to Supabase authentication state changes.
  * Immediately invokes callback on SIGNED_IN, SIGNED_OUT, or USER_UPDATED.
  */
@@ -101,6 +247,26 @@ export function subscribeAuthState(callback: (role: UserRole | null) => void): {
     } else {
       const role = await fetchAuthenticatedRole();
       callback(role);
+    }
+  });
+
+  return {
+    unsubscribe: () => sub.subscription.unsubscribe(),
+  };
+}
+
+/**
+ * Subscribes to customer profile changes.
+ */
+export function subscribeCustomerProfile(
+  callback: (profile: CustomerProfile | null) => void
+): { unsubscribe: () => void } {
+  const { data: sub } = supabase.auth.onAuthStateChange(async (event) => {
+    if (event === 'SIGNED_OUT') {
+      callback(null);
+    } else {
+      const prof = await fetchCurrentCustomerProfile();
+      callback(prof);
     }
   });
 
@@ -125,4 +291,3 @@ export async function signOutUser(): Promise<void> {
     console.warn('Error during signOut:', err);
   }
 }
-

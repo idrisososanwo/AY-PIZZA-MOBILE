@@ -142,12 +142,12 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
 
             <View style={styles.divider} />
 
-            {/* Unguessable Receipt Token */}
+            {/* Verified Digital Receipt Notice */}
             <View style={styles.tokenBox}>
-              <Text style={styles.tokenLabel}>Secure Receipt Token (Saved Locally):</Text>
-              <Text style={styles.tokenText}>{receiptToken}</Text>
+              <Text style={styles.tokenLabel}>Digital Receipt Verified</Text>
+              <Text style={styles.tokenText}>Order #{orderNumber}</Text>
               <Text style={styles.tokenNote}>
-                🔒 Use this cryptographic token to access your receipt without an account.
+                ✅ Stored securely on your device. Show this order number when collecting your pizza opposite King Jaja Hall.
               </Text>
             </View>
           </View>

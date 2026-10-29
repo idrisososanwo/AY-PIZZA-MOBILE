@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
+  Alert,
 } from 'react-native';
 import { Colors } from '../constants/colors';
 import { Brand } from '../constants/brand';
@@ -31,6 +32,21 @@ export const CartView: React.FC<CartViewProps> = ({
 
   const hasItems = cartState.items.length > 0;
   const isDelivery = cartState.fulfillmentType === 'delivery';
+
+  const handleClearCart = () => {
+    Alert.alert(
+      'Clear Shopping Cart',
+      'Are you sure you want to remove all items from your cart?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear Cart',
+          style: 'destructive',
+          onPress: () => cartStore.clearCart(),
+        },
+      ]
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -171,7 +187,7 @@ export const CartView: React.FC<CartViewProps> = ({
             <View style={styles.card}>
               <View style={styles.cartItemsHeader}>
                 <Text style={styles.cardTitle}>2. Order Items</Text>
-                <TouchableOpacity onPress={() => cartStore.clearCart()}>
+                <TouchableOpacity onPress={handleClearCart}>
                   <Text style={styles.clearBtnText}>Clear All</Text>
                 </TouchableOpacity>
               </View>
@@ -220,7 +236,7 @@ export const CartView: React.FC<CartViewProps> = ({
 
                     {item.specialInstructions && (
                       <Text style={styles.instructionsText}>
-                        📝 "{item.specialInstructions}"
+                        {`📝 "${item.specialInstructions}"`}
                       </Text>
                     )}
 
@@ -299,12 +315,11 @@ export const CartView: React.FC<CartViewProps> = ({
                 </Text>
               </View>
 
-              {/* Provisional Notice */}
+              {/* Campus Quality Notice */}
               <View style={styles.provisionalDisclaimer}>
-                <Text style={styles.disclaimerTitle}>ℹ️ Provisional Price Notice</Text>
+                <Text style={styles.disclaimerTitle}>ℹ️ Freshly Baked on Campus</Text>
                 <Text style={styles.disclaimerText}>
-                  All displayed item totals and delivery fees are database-provided provisional estimates.
-                  Final payment amounts will be validated authoritatively server-side via Supabase at checkout.
+                  Every pizza is hand-stretched and baked hot opposite King Jaja Hall. Campus delivery fee is applied based on your selected UNILAG landmark.
                 </Text>
               </View>
 

@@ -40,7 +40,18 @@ jest.mock('expo-device', () => ({
   isDevice: true,
 }));
 
-// Mock for react-native
+// Mock for react-native-safe-area-context
+jest.mock('react-native-safe-area-context', () => {
+  const inset = { top: 44, right: 0, bottom: 34, left: 0 };
+  return {
+    SafeAreaProvider: ({ children }) => children,
+    SafeAreaConsumer: ({ children }) => children(inset),
+    SafeAreaView: 'SafeAreaView',
+    useSafeAreaInsets: () => inset,
+    useSafeAreaFrame: () => ({ x: 0, y: 0, width: 390, height: 844 }),
+  };
+});
+
 jest.mock('react-native', () => ({
   Platform: {
     OS: 'android',

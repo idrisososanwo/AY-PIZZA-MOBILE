@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,7 +10,7 @@ import {
   Switch,
 } from 'react-native';
 import { Colors } from '../constants/colors';
-import { Product, ProductSize, CustomizationOption, CustomizationGroup } from '../types/catalog';
+import { Product } from '../types/catalog';
 import { CartItem } from '../domains/cart/cart-types';
 import {
   initializeCustomizerState,
@@ -51,11 +51,6 @@ const CustomizerModalContent: React.FC<CustomizerModalContentProps> = ({
   const [state, setState] = useState<CustomizerState>(() =>
     initializeCustomizerState(product, existingCartItem, allPizzaProducts)
   );
-
-  // Reinitialize whenever product or existingCartItem changes
-  useEffect(() => {
-    setState(initializeCustomizerState(product, existingCartItem, allPizzaProducts));
-  }, [product, existingCartItem, allPizzaProducts]);
 
   const priceBreakdown = useMemo(() => calculateCustomizerPrice(state), [state]);
   const validation = useMemo(() => validateCustomizerState(state), [state]);
@@ -370,7 +365,13 @@ const CustomizerModalContent: React.FC<CustomizerModalContentProps> = ({
 
 export const CustomizerModal: React.FC<CustomizerModalProps> = (props) => {
   if (!props.product || !props.visible) return null;
-  return <CustomizerModalContent {...props} product={props.product} />;
+  return (
+    <CustomizerModalContent
+      key={`${props.product.id}_${props.existingCartItem?.id || 'new'}`}
+      {...props}
+      product={props.product}
+    />
+  );
 };
 
 const styles = StyleSheet.create({

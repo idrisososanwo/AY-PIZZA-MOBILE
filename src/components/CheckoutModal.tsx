@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -9,16 +9,20 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Colors } from '../constants/colors';
 import { CartState } from '../domains/cart/cart-types';
 import { orderService, CustomerCheckoutDetails, AuthoritativePriceDiscrepancyError } from '../domains/order/order-service';
-import { paymentService } from '../domains/payment/payment-service';
 import { GuestReceiptStore } from '../domains/order/guest-receipt-store';
+import { CustomerProfile, CustomerAddress } from '../domains/customer/customer-types';
+import { customerService } from '../domains/customer/customer-service';
 
 interface CheckoutModalProps {
   visible: boolean;
   cartState: CartState;
+  customerProfile?: CustomerProfile | null;
   onClose: () => void;
   onProceedToPayment: (orderParams: {
     orderId: string;
@@ -35,14 +39,16 @@ interface CheckoutModalProps {
 export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   visible,
   cartState,
+  customerProfile,
   onClose,
   onProceedToPayment,
 }) => {
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerName, setCustomerName] = useState(customerProfile?.fullName || '');
+  const [customerPhone, setCustomerPhone] = useState(customerProfile?.phone || '');
+  const [customerEmail, setCustomerEmail] = useState(customerProfile?.email || '');
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [savedAddresses, setSavedAddresses] = useState<CustomerAddress[]>([]);
   const [discrepancyNotice, setDiscrepancyNotice] = useState<{
     estimated: number;
     authoritative: number;
@@ -50,6 +56,20 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   } | null>(null);
 
   const isDelivery = cartState.fulfillmentType === 'delivery';
+
+  // Pre-fill profile info if customer is logged in
+  useEffect(() => {
+    if (!visible || !customerProfile) return;
+
+    customerService.getAddresses(customerProfile.id).then((res) => {
+      if (res.success && res.addresses) {
+        setSavedAddresses(res.addresses);
+      }
+      if (customerProfile.fullName) setCustomerName(customerProfile.fullName);
+      if (customerProfile.phone) setCustomerPhone(customerProfile.phone);
+      if (customerProfile.email) setCustomerEmail(customerProfile.email);
+    });
+  }, [customerProfile, visible]);
 
   const validateInputs = (): boolean => {
     if (!customerName.trim()) {
@@ -98,12 +118,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           }
         }
 
-        // Scenario B: The order exists on the server, but network dropped before this device
-        // ever received the receipt token. Local recovery is impossible without server OTP.
         if (!finalReceiptToken) {
           Alert.alert(
             'Order Already Received',
-            `Order #${result.orderNumber} is already recorded in the restaurant system. Due to an interrupted connection during initial creation, your device did not receive the receipt credential. Please check your confirmation email or contact AY Pizza counter at King Jaja Hall with your phone number (${customerDetails.customerPhone}).`
+            `Order #${result.orderNumber} is already recorded in the restaurant system. Please check your confirmation or contact AY Pizza counter at King Jaja Hall with your phone number (${customerDetails.customerPhone}).`
           );
           return;
         }
@@ -136,23 +154,31 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView
+        style={styles.modalOverlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <View style={styles.modalContainer}>
           {/* Header */}
           <View style={styles.header}>
             <View>
               <Text style={styles.headerTitle}>Order Checkout 🛍️</Text>
-              <Text style={styles.headerSubtitle}>Authoritative Server Pricing & Paystack</Text>
+              <Text style={styles.headerSubtitle}>Complete your contact & delivery details</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.8}>
               <Text style={styles.closeBtnText}>✕</Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={styles.scrollArea}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             {/* Fulfillment Mode Badge */}
             <View style={styles.fulfillmentBanner}>
-              <Text style={styles.fulfillmentEmoji}>{isDelivery ? '🛵' : '🏪'}</Text>
+              <Text style={styles.fulfillmentEmoji}>{isDelivery ? '🛵' : '🏬'}</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.fulfillmentTitle}>
                   {isDelivery ? `Campus Delivery to ${cartState.selectedLandmark?.name}` : 'Free Pickup at King Jaja Hall'}
@@ -165,80 +191,117 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </View>
             </View>
 
-            {/* Price Discrepancy Alert */}
+            {/* Price Update Notice */}
             {discrepancyNotice && (
               <View style={styles.discrepancyCard}>
                 <Text style={styles.discrepancyTitle}>⚠️ Menu Price Update</Text>
                 <Text style={styles.discrepancyText}>
-                  The live server calculation differs from your original estimate:
+                  The live calculation differs slightly from your estimate:
                 </Text>
                 <Text style={styles.discrepancyAmount}>
-                  Cart Estimate: ₦{discrepancyNotice.estimated.toLocaleString()} → Server Total: ₦
+                  Cart Estimate: ₦{discrepancyNotice.estimated.toLocaleString()} → Total: ₦
                   {discrepancyNotice.authoritative.toLocaleString()}
                 </Text>
                 <Text style={styles.discrepancyNote}>
-                  Please review and accept the authoritative total before proceeding.
+                  Please review the verified total before proceeding.
                 </Text>
               </View>
             )}
 
             {/* Customer Contact Form */}
             <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>1. Customer Information (Guest or Account)</Text>
+              <Text style={styles.sectionTitle}>1. Contact Details</Text>
 
               <Text style={styles.inputLabel}>Full Name *</Text>
               <TextInput
                 style={styles.textInput}
                 placeholder="e.g. Adebayo Idris"
-                placeholderTextColor={Colors.muted}
+                placeholderTextColor={Colors.textMuted}
                 value={customerName}
                 onChangeText={setCustomerName}
+                autoCapitalize="words"
               />
 
-              <Text style={styles.inputLabel}>Phone Number (WhatsApp / Call) *</Text>
-              <View style={styles.phoneInputRow}>
-                <View style={styles.phonePrefixBox}>
-                  <Text style={styles.phonePrefixText}>🇳🇬 +234</Text>
-                </View>
-                <TextInput
-                  style={[styles.textInput, { flex: 1 }]}
-                  placeholder="08012345678"
-                  placeholderTextColor={Colors.muted}
-                  keyboardType="phone-pad"
-                  value={customerPhone}
-                  onChangeText={setCustomerPhone}
-                />
-              </View>
+              <Text style={styles.inputLabel}>Phone Number (Call / WhatsApp) *</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="e.g. 0812 345 6789"
+                placeholderTextColor={Colors.textMuted}
+                value={customerPhone}
+                onChangeText={setCustomerPhone}
+                keyboardType="phone-pad"
+              />
 
-              <Text style={styles.inputLabel}>Email Address (For e-receipt, optional)</Text>
+              <Text style={styles.inputLabel}>Email Address (For receipt)</Text>
               <TextInput
                 style={styles.textInput}
                 placeholder="e.g. adebayo@unilag.edu.ng"
-                placeholderTextColor={Colors.muted}
-                keyboardType="email-address"
-                autoCapitalize="none"
+                placeholderTextColor={Colors.textMuted}
                 value={customerEmail}
                 onChangeText={setCustomerEmail}
-              />
-
-              <Text style={styles.inputLabel}>Order / Kitchen Notes (Optional)</Text>
-              <TextInput
-                style={[styles.textInput, styles.notesInput]}
-                placeholder="e.g. Call when outside Jaja Hall, please include extra serviette"
-                placeholderTextColor={Colors.muted}
-                multiline
-                numberOfLines={2}
-                value={deliveryNotes}
-                onChangeText={setDeliveryNotes}
+                keyboardType="email-address"
+                autoCapitalize="none"
               />
             </View>
 
-            {/* Order Review List */}
+            {/* Delivery Instructions */}
+            {isDelivery && (
+              <View style={styles.sectionCard}>
+                <Text style={styles.sectionTitle}>2. Delivery Instructions</Text>
+
+                {savedAddresses.length > 0 && (
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={[styles.inputLabel, { marginBottom: 6 }]}>Saved Addresses (Tap to apply contact / notes):</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row' }}>
+                      {savedAddresses.map((addr) => (
+                        <TouchableOpacity
+                          key={addr.id}
+                          style={{
+                            backgroundColor: Colors.warmCream,
+                            borderRadius: 10,
+                            paddingHorizontal: 12,
+                            paddingVertical: 8,
+                            marginRight: 8,
+                            borderWidth: 1,
+                            borderColor: Colors.borderLight,
+                          }}
+                          onPress={() => {
+                            if (addr.contactPhone) setCustomerPhone(addr.contactPhone);
+                            if (addr.deliveryNotes) setDeliveryNotes(addr.deliveryNotes);
+                          }}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.charcoal }}>
+                            📍 {addr.landmarkName}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: Colors.textMuted }} numberOfLines={1}>
+                            {addr.detailedAddress}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                <TextInput
+                  style={[styles.textInput, styles.notesInput]}
+                  placeholder="e.g. Leave at porter's desk / Call when outside gate"
+                  placeholderTextColor={Colors.textMuted}
+                  value={deliveryNotes}
+                  onChangeText={setDeliveryNotes}
+                  multiline
+                />
+              </View>
+            )}
+
+            {/* Order Items Review */}
             <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>2. Itemized Order Review ({cartState.itemCount} items)</Text>
+              <Text style={styles.sectionTitle}>
+                {isDelivery ? '3. Order Summary' : '2. Order Summary'}
+              </Text>
+
               {cartState.items.map((item) => (
                 <View key={item.id} style={styles.itemRow}>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
                     <Text style={styles.itemName}>
                       {item.quantity}x {item.productName}
                       {item.sizeName ? ` (${item.sizeName})` : ''}
@@ -257,54 +320,49 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <Text style={styles.itemPrice}>₦{item.lineTotal.toLocaleString()}</Text>
                 </View>
               ))}
-            </View>
 
-            {/* Total Breakdown */}
-            <View style={styles.sectionCard}>
-              <Text style={styles.sectionTitle}>3. Authoritative Order Total</Text>
-
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Subtotal:</Text>
-                <Text style={styles.summaryValue}>₦{cartState.subtotal.toLocaleString()}</Text>
-              </View>
-
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>
-                  {isDelivery ? `Delivery (${cartState.selectedLandmark?.name}):` : 'Pickup Fee:'}
-                </Text>
-                <Text style={styles.summaryValue}>
-                  {cartState.deliveryFee === 0 ? 'FREE (₦0)' : `₦${cartState.deliveryFee.toLocaleString()}`}
-                </Text>
-              </View>
-
-              <View style={[styles.summaryRow, styles.totalRow]}>
-                <Text style={styles.totalLabel}>Grand Total:</Text>
-                <Text style={styles.totalValue}>
-                  ₦{cartState.estimatedTotal.toLocaleString()}
-                </Text>
+              <View style={{ marginTop: 12 }}>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Subtotal:</Text>
+                  <Text style={styles.summaryValue}>₦{cartState.subtotal.toLocaleString()}</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Delivery Fee:</Text>
+                  <Text style={styles.summaryValue}>
+                    {cartState.deliveryFee > 0
+                      ? `₦${cartState.deliveryFee.toLocaleString()}`
+                      : 'FREE (₦0)'}
+                  </Text>
+                </View>
+                <View style={[styles.summaryRow, styles.totalRow]}>
+                  <Text style={styles.totalLabel}>Total to Pay:</Text>
+                  <Text style={styles.totalValue}>
+                    ₦{cartState.estimatedTotal.toLocaleString()}
+                  </Text>
+                </View>
               </View>
             </View>
-          </ScrollView>
 
-          {/* Footer Action */}
-          <View style={styles.footer}>
+            {/* Proceed to Payment CTA */}
             <TouchableOpacity
               style={[styles.payBtn, isSubmitting && styles.payBtnDisabled]}
               onPress={handleCheckoutSubmit}
               disabled={isSubmitting}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
               {isSubmitting ? (
-                <ActivityIndicator color={Colors.crust} />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.payBtnText}>
-                  Pay ₦{cartState.estimatedTotal.toLocaleString()} with Paystack 🔒
+                  Pay ₦{cartState.estimatedTotal.toLocaleString()} Securely 💳
                 </Text>
               )}
             </TouchableOpacity>
-          </View>
+
+            <View style={{ height: 32 }} />
+          </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
@@ -312,15 +370,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: 'rgba(39, 33, 31, 0.65)',
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: Colors.night,
+    backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '90%',
-    paddingBottom: 24,
+    maxHeight: '92%',
   },
   header: {
     flexDirection: 'row',
@@ -330,44 +387,47 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.charcoal,
+    borderBottomColor: 'rgba(39, 33, 31, 0.08)',
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '800',
-    color: Colors.frost,
+    fontWeight: '900',
+    color: Colors.charcoal,
   },
   headerSubtitle: {
     fontSize: 12,
-    color: Colors.muted,
+    color: Colors.textSecondary,
     marginTop: 2,
   },
   closeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: Colors.charcoal,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(39, 33, 31, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   closeBtnText: {
-    color: Colors.frost,
-    fontSize: 16,
+    color: Colors.charcoal,
+    fontSize: 15,
     fontWeight: '700',
   },
   scrollArea: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
+  },
+  scrollContent: {
     paddingVertical: 14,
+    paddingBottom: 40,
   },
   fulfillmentBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.warmCream,
     padding: 14,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.charcoal,
-    marginBottom: 16,
+    borderColor: 'rgba(39, 33, 31, 0.08)',
+    marginBottom: 14,
     gap: 12,
   },
   fulfillmentEmoji: {
@@ -375,92 +435,81 @@ const styles = StyleSheet.create({
   },
   fulfillmentTitle: {
     fontSize: 14,
-    fontWeight: '700',
-    color: Colors.frost,
+    fontWeight: '800',
+    color: Colors.charcoal,
   },
   fulfillmentDetail: {
     fontSize: 12,
-    color: Colors.muted,
+    color: Colors.textSecondary,
     marginTop: 2,
   },
   discrepancyCard: {
-    backgroundColor: 'rgba(230, 81, 0, 0.15)',
-    borderColor: '#e65100',
+    backgroundColor: Colors.softTomato,
+    borderColor: 'rgba(201, 35, 43, 0.25)',
     borderWidth: 1,
     borderRadius: 12,
     padding: 14,
-    marginBottom: 16,
+    marginBottom: 14,
   },
   discrepancyTitle: {
-    color: '#ff9800',
-    fontSize: 14,
+    color: Colors.primaryRed,
+    fontSize: 13,
     fontWeight: '800',
     marginBottom: 4,
   },
   discrepancyText: {
-    color: Colors.frost,
+    color: Colors.charcoal,
     fontSize: 12,
     marginBottom: 4,
   },
   discrepancyAmount: {
-    color: Colors.frost,
+    color: Colors.charcoal,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
     marginVertical: 4,
   },
   discrepancyNote: {
-    color: Colors.muted,
+    color: Colors.textSecondary,
     fontSize: 11,
   },
   sectionCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: '#FFFFFF',
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.charcoal,
-    marginBottom: 16,
+    borderColor: 'rgba(39, 33, 31, 0.08)',
+    marginBottom: 14,
+    shadowColor: '#27211F',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
   },
   sectionTitle: {
     fontSize: 14,
-    fontWeight: '800',
-    color: Colors.neon,
+    fontWeight: '900',
+    color: Colors.charcoal,
     marginBottom: 12,
   },
   inputLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: Colors.frost,
+    color: Colors.charcoal,
     marginBottom: 6,
     marginTop: 8,
   },
   textInput: {
-    backgroundColor: Colors.night,
-    borderWidth: 1,
-    borderColor: Colors.charcoal,
+    backgroundColor: Colors.warmCream,
     borderRadius: 10,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: Colors.frost,
+    paddingVertical: 11,
+    color: Colors.charcoal,
     fontSize: 14,
-  },
-  phoneInputRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  phonePrefixBox: {
-    backgroundColor: Colors.charcoal,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  phonePrefixText: {
-    color: Colors.frost,
-    fontWeight: '700',
-    fontSize: 13,
+    borderWidth: 1,
+    borderColor: 'rgba(39, 33, 31, 0.1)',
   },
   notesInput: {
-    height: 60,
+    height: 70,
     textAlignVertical: 'top',
   },
   itemRow: {
@@ -468,22 +517,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.charcoal,
+    borderBottomColor: 'rgba(39, 33, 31, 0.06)',
   },
   itemName: {
-    color: Colors.frost,
+    color: Colors.charcoal,
     fontSize: 13,
     fontWeight: '700',
   },
   itemSubtext: {
-    color: Colors.muted,
+    color: Colors.textMuted,
     fontSize: 11,
     marginTop: 2,
   },
   itemPrice: {
-    color: Colors.frost,
+    color: Colors.charcoal,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   summaryRow: {
     flexDirection: 'row',
@@ -491,53 +540,49 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   summaryLabel: {
-    color: Colors.muted,
+    color: Colors.textSecondary,
     fontSize: 13,
   },
   summaryValue: {
-    color: Colors.frost,
+    color: Colors.charcoal,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   totalRow: {
     borderTopWidth: 1,
-    borderTopColor: Colors.charcoal,
+    borderTopColor: 'rgba(39, 33, 31, 0.08)',
     marginTop: 8,
     paddingTop: 10,
   },
   totalLabel: {
-    color: Colors.frost,
+    color: Colors.charcoal,
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '900',
   },
   totalValue: {
-    color: Colors.neon,
+    color: Colors.primaryRed,
     fontSize: 18,
     fontWeight: '900',
   },
-  footer: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-  },
   payBtn: {
-    backgroundColor: Colors.lava,
-    paddingVertical: 16,
+    backgroundColor: Colors.primaryRed,
+    paddingVertical: 15,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.lava,
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: Colors.primaryRed,
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowRadius: 5,
+    elevation: 3,
+    marginTop: 8,
   },
   payBtnDisabled: {
-    opacity: 0.5,
+    opacity: 0.6,
   },
   payBtnText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '900',
-    letterSpacing: 0.5,
   },
 });
