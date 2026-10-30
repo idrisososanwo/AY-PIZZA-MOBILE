@@ -11,6 +11,7 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { signInCustomer, signUpCustomer, sendPasswordResetEmail } from '../domains/auth/auth-service';
 
@@ -29,6 +30,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -135,7 +137,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.sheetContainer}>
+        <View style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           {/* Header */}
           <View style={styles.sheetHeader}>
             <View>
@@ -177,7 +179,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
           <ScrollView
             style={styles.scrollBody}
-            contentContainerStyle={styles.scrollContent}
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingBottom: Math.max(insets.bottom + 12, 24) },
+            ]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >

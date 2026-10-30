@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { CartState } from '../domains/cart/cart-types';
 import { orderService, CustomerCheckoutDetails, AuthoritativePriceDiscrepancyError } from '../domains/order/order-service';
@@ -43,6 +44,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   onClose,
   onProceedToPayment,
 }) => {
+  const insets = useSafeAreaInsets();
   const [customerName, setCustomerName] = useState(customerProfile?.fullName || '');
   const [customerPhone, setCustomerPhone] = useState(customerProfile?.phone || '');
   const [customerEmail, setCustomerEmail] = useState(customerProfile?.email || '');
@@ -158,7 +160,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         style={styles.modalOverlay}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.modalContainer}>
+        <View style={[styles.modalContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           {/* Header */}
           <View style={styles.header}>
             <View>
@@ -172,7 +174,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
           <ScrollView
             style={styles.scrollArea}
-            contentContainerStyle={styles.scrollContent}
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingBottom: Math.max(insets.bottom + 20, 36) },
+            ]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >

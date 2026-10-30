@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { CartItem } from '../domains/cart/cart-types';
 
@@ -43,11 +44,20 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
   onDone,
   onTrackOrder,
 }) => {
+  const insets = useSafeAreaInsets();
   const isDelivery = fulfillmentType === 'delivery';
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onDone}>
-      <View style={styles.container}>
+      <View
+        style={[
+          styles.container,
+          {
+            paddingTop: Math.max(insets.top, 16),
+            paddingBottom: Math.max(insets.bottom, 16),
+          },
+        ]}
+      >
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {/* Success Banner */}
           <View style={styles.successBadgeBox}>

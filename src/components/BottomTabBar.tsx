@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Platform } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 
@@ -30,7 +30,7 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({
       style={[
         styles.barContainer,
         {
-          paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 14 : 8),
+          paddingBottom: Math.max(insets.bottom, 12),
         },
       ]}
     >

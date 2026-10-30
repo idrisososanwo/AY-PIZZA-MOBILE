@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   TextInput,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { DeliveryLandmark } from '../types/delivery';
 import { PROVISIONAL_LANDMARKS } from '../domains/delivery/delivery-service';
@@ -25,6 +26,7 @@ export const LandmarkPickerModal: React.FC<LandmarkPickerModalProps> = ({
   onSelectLandmark,
   onClose,
 }) => {
+  const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
 
   const filtered = PROVISIONAL_LANDMARKS.filter((l) =>
@@ -34,7 +36,7 @@ export const LandmarkPickerModal: React.FC<LandmarkPickerModalProps> = ({
   return (
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.content}>
+        <View style={[styles.content, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <View style={styles.header}>
             <View>
               <Text style={styles.title}>Select Delivery Landmark</Text>
@@ -57,7 +59,11 @@ export const LandmarkPickerModal: React.FC<LandmarkPickerModalProps> = ({
           </View>
 
           {/* Landmarks List */}
-          <ScrollView style={styles.scrollList} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={styles.scrollList}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 12, 24) }}
+            showsVerticalScrollIndicator={false}
+          >
             {filtered.map((landmark) => {
               const isSelected = selectedLandmark?.id === landmark.id;
               return (

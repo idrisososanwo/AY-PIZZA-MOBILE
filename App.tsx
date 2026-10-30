@@ -3,7 +3,6 @@ import {
   StyleSheet,
   Text,
   View,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   TextInput,
@@ -13,7 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from './src/constants/colors';
 import { Brand } from './src/constants/brand';
 import { FoodImages } from './src/constants/images';
@@ -337,7 +336,7 @@ export default function App() {
 
     return (
       <SafeAreaProvider>
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
           <StatusBar style="light" />
           <KitchenDisplaySystem
             currentRole={authenticatedRole!}
@@ -355,7 +354,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <StatusBar style="dark" />
 
         {/* 1. TOP BRAND HEADER */}
@@ -520,7 +519,10 @@ export default function App() {
               ) : (
                 <View style={{ flex: 1 }}>
                   <ScrollView
-                    contentContainerStyle={styles.productListContent}
+                    contentContainerStyle={[
+                      styles.productListContent,
+                      cartState.itemCount > 0 && { paddingBottom: 100 },
+                    ]}
                     showsVerticalScrollIndicator={false}
                   >
                     {filteredProducts.map((prod) => (
@@ -689,7 +691,7 @@ const styles = StyleSheet.create({
   topHeader: {
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 8 : 12,
+    paddingTop: 10,
     paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(39, 33, 31, 0.08)',

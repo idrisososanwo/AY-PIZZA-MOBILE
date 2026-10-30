@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { CustomerAddress, NewAddressInput } from '../domains/customer/customer-types';
 import { customerService } from '../domains/customer/customer-service';
@@ -32,6 +33,7 @@ export const SavedAddressesModal: React.FC<SavedAddressesModalProps> = ({
   onClose,
   onSelectAddress,
 }) => {
+  const insets = useSafeAreaInsets();
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -162,7 +164,7 @@ export const SavedAddressesModal: React.FC<SavedAddressesModalProps> = ({
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.sheetContainer}>
+        <View style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           {/* Header */}
           <View style={styles.sheetHeader}>
             <View>
@@ -190,7 +192,11 @@ export const SavedAddressesModal: React.FC<SavedAddressesModalProps> = ({
 
           {isEditing ? (
             /* ADDRESS FORM */
-            <ScrollView style={styles.scrollBody} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.scrollBody}
+              contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 12, 24) }}
+              showsVerticalScrollIndicator={false}
+            >
               {errorMsg && (
                 <View style={styles.errorBanner}>
                   <Text style={styles.errorText}>⚠️ {errorMsg}</Text>
@@ -294,7 +300,11 @@ export const SavedAddressesModal: React.FC<SavedAddressesModalProps> = ({
             </ScrollView>
           ) : (
             /* ADDRESS LIST */
-            <ScrollView style={styles.scrollBody} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.scrollBody}
+              contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 12, 24) }}
+              showsVerticalScrollIndicator={false}
+            >
               {loading ? (
                 <View style={styles.loadingBox}>
                   <ActivityIndicator size="large" color={Colors.primaryRed} />

@@ -8,6 +8,7 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { Brand } from '../constants/brand';
 import { CartState, CartItem } from '../domains/cart/cart-types';
@@ -28,6 +29,7 @@ export const CartView: React.FC<CartViewProps> = ({
   onEditItem,
   onProceedToCheckout,
 }) => {
+  const insets = useSafeAreaInsets();
   const [landmarkPickerVisible, setLandmarkPickerVisible] = useState(false);
 
   const hasItems = cartState.items.length > 0;
@@ -50,7 +52,13 @@ export const CartView: React.FC<CartViewProps> = ({
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom + 24, 48) },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Header Summary */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Your Shopping Cart</Text>

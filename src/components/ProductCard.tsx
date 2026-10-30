@@ -108,12 +108,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   imageContainer: {
-    width: 86,
-    height: 86,
+    width: 78,
+    height: 78,
     borderRadius: Radius.md,
     overflow: 'hidden',
     backgroundColor: Colors.surfaceCream,
-    marginRight: 12,
+    marginRight: 10,
   },
   productImage: {
     width: '100%',
@@ -122,6 +122,7 @@ const styles = StyleSheet.create({
   headerInfo: {
     flex: 1,
     justifyContent: 'space-between',
+    minWidth: 0,
   },
   titleRow: {
     flexDirection: 'row',
@@ -168,11 +169,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   priceContainer: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 4,
+    flexShrink: 1,
+    minWidth: 0,
   },
   priceLabel: {
     fontSize: 10,
@@ -184,8 +189,8 @@ const styles = StyleSheet.create({
     ...Typography.pricePrimary,
   },
   actionButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: Radius.pill,
     justifyContent: 'center',
     alignItems: 'center',
@@ -201,6 +206,6 @@ const styles = StyleSheet.create({
   },
   actionButtonText: {
     ...Typography.button,
-    fontSize: 12,
+    fontSize: 11,
   },
 });

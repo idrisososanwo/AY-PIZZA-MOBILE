@@ -8,7 +8,10 @@ import {
   TouchableOpacity,
   TextInput,
   Switch,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { Product } from '../types/catalog';
 import { CartItem } from '../domains/cart/cart-types';
@@ -48,6 +51,7 @@ const CustomizerModalContent: React.FC<CustomizerModalContentProps> = ({
   existingCartItem,
   allPizzaProducts,
 }) => {
+  const insets = useSafeAreaInsets();
   const [state, setState] = useState<CustomizerState>(() =>
     initializeCustomizerState(product, existingCartItem, allPizzaProducts)
   );
@@ -67,7 +71,10 @@ const CustomizerModalContent: React.FC<CustomizerModalContentProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView
+        style={styles.modalOverlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
         <View style={styles.modalContent}>
           {/* Header */}
           <View style={styles.modalHeader}>
@@ -317,7 +324,7 @@ const CustomizerModalContent: React.FC<CustomizerModalContentProps> = ({
           )}
 
           {/* STICKY FOOTER */}
-          <View style={styles.footer}>
+          <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={styles.footerTopRow}>
               {/* Quantity Stepper */}
               <View style={styles.stepperContainer}>
@@ -358,7 +365,7 @@ const CustomizerModalContent: React.FC<CustomizerModalContentProps> = ({
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

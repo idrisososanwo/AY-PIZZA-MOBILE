@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 
 interface TermsPrivacyModalProps {
@@ -20,12 +21,13 @@ export const TermsPrivacyModal: React.FC<TermsPrivacyModalProps> = ({
   type,
   onClose,
 }) => {
+  const insets = useSafeAreaInsets();
   const isTerms = type === 'terms';
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.sheetContainer}>
+        <View style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           {/* Header */}
           <View style={styles.sheetHeader}>
             <View>
@@ -39,7 +41,11 @@ export const TermsPrivacyModal: React.FC<TermsPrivacyModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.scrollBody} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={styles.scrollBody}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 12, 24) }}
+            showsVerticalScrollIndicator={false}
+          >
             {isTerms ? (
               <View style={styles.textContainer}>
                 <Text style={styles.sectionHeading}>1. Service Overview</Text>

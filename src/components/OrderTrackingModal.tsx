@@ -15,10 +15,10 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
-import { Order, OrderStatus } from '../types/order';
+import { OrderStatus } from '../types/order';
 import { orderTrackingService, TrackingState } from '../domains/order/order-tracking-service';
 import { notificationService, NotificationPermissionState } from '../domains/notifications/notification-service';
 
@@ -59,6 +59,7 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
   receiptToken,
   onClose,
 }) => {
+  const insets = useSafeAreaInsets();
   const [trackingState, setTrackingState] = useState<TrackingState>({
     order: null,
     isLoading: true,
@@ -126,7 +127,7 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
       <View style={styles.container}>
         {/* Top Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: Math.max(insets.top + 6, 16) }]}>
           <View>
             <Text style={styles.headerTitle}>Order Tracking</Text>
             {order ? (
@@ -180,7 +181,13 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
             </TouchableOpacity>
           </View>
         ) : order ? (
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            contentContainerStyle={[
+              styles.scrollContent,
+              { paddingBottom: Math.max(insets.bottom + 20, 36) },
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
             {/* CANCELLED BANNER */}
             {isCancelled && (
               <View style={styles.cancelledCard}>
@@ -442,7 +449,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingTop: 16,
     paddingBottom: 16,
     backgroundColor: Colors.surfaceCard,
     borderBottomWidth: 1,

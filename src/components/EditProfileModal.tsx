@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { CustomerProfile } from '../domains/customer/customer-types';
 import { customerService } from '../domains/customer/customer-service';
@@ -27,6 +28,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   onClose,
   onProfileUpdated,
 }) => {
+  const insets = useSafeAreaInsets();
   const [fullName, setFullName] = useState(profile.fullName || '');
   const [phone, setPhone] = useState(profile.phone || '');
   const [loading, setLoading] = useState(false);
@@ -70,7 +72,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.sheetContainer}>
+        <View style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           <View style={styles.sheetHeader}>
             <View>
               <Text style={styles.title}>Edit Profile 👤</Text>

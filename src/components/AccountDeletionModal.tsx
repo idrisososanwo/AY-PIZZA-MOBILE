@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { customerService } from '../domains/customer/customer-service';
 import { signOutUser } from '../domains/auth/auth-service';
@@ -25,6 +26,7 @@ export const AccountDeletionModal: React.FC<AccountDeletionModalProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const insets = useSafeAreaInsets();
   const [reason, setReason] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -69,7 +71,7 @@ export const AccountDeletionModal: React.FC<AccountDeletionModalProps> = ({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.sheetContainer}>
+        <View style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, 24) }]}>
           <View style={styles.sheetHeader}>
             <View>
               <Text style={styles.title}>Delete Account ⚠️</Text>

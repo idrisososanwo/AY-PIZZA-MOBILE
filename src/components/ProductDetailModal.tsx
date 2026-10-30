@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View, Modal, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { Product } from '../types/catalog';
 import { Brand } from '../constants/brand';
@@ -19,6 +20,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   onClose,
   onCustomize,
 }) => {
+  const insets = useSafeAreaInsets();
   if (!product) return null;
 
   const hasCustomizations =
@@ -30,7 +32,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   return (
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+        <View style={[styles.modalContent, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           {/* Hero Image with Close button overlay */}
           <View style={styles.imageHeroContainer}>
             <Image source={foodImage} style={styles.imageHero} resizeMode="cover" />
@@ -94,8 +96,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                 {!product.isAvailable
                   ? 'Currently Out of Stock'
                   : hasCustomizations
-                  ? 'Configure & Customize 🍕'
-                  : 'Add to Order 🛒'}
+                    ? 'Configure & Customize 🍕'
+                    : 'Add to Order 🛒'}
               </Text>
             </TouchableOpacity>
           </View>

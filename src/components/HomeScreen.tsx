@@ -221,9 +221,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 </Text>
 
                 <View style={styles.popularCardFooter}>
-                  <View>
+                  <View style={styles.popularPriceContainer}>
                     <Text style={styles.popularFromText}>From</Text>
-                    <Text style={styles.popularPrice}>₦{prod.basePrice.toLocaleString()}</Text>
+                    <Text style={styles.popularPrice} numberOfLines={1}>
+                      ₦{prod.basePrice.toLocaleString()}
+                    </Text>
                   </View>
 
                   <TouchableOpacity
@@ -285,7 +287,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   greetingTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '900',
     color: Colors.charcoal,
     marginTop: 2,
@@ -300,6 +302,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(39, 33, 31, 0.1)',
     maxWidth: 160,
+    flexShrink: 1,
     shadowColor: '#27211F',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -540,8 +543,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   popularImageContainer: {
-    width: 115,
-    height: 115,
+    width: 100,
+    height: 100,
     position: 'relative',
     backgroundColor: '#FFF3DD',
   },
@@ -565,8 +568,9 @@ const styles = StyleSheet.create({
   },
   popularCardBody: {
     flex: 1,
-    padding: 12,
+    padding: 10,
     justifyContent: 'space-between',
+    minWidth: 0,
   },
   popularTitle: {
     fontSize: 15,
@@ -584,6 +588,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 8,
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  popularPriceContainer: {
+    flexShrink: 1,
+    minWidth: 0,
   },
   popularFromText: {
     fontSize: 10,
@@ -597,7 +607,7 @@ const styles = StyleSheet.create({
   },
   popularAddBtn: {
     backgroundColor: Colors.softTomato,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
@@ -605,7 +615,7 @@ const styles = StyleSheet.create({
   },
   popularAddBtnText: {
     color: Colors.primaryRed,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
   },
   campusAssuranceCard: {

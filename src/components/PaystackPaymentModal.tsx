@@ -7,7 +7,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  ScrollView,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { Config } from '../config/env';
 import { paymentService } from '../domains/payment/payment-service';
@@ -38,6 +40,7 @@ export const PaystackPaymentModal: React.FC<PaystackPaymentModalProps> = ({
   onClose,
   onPaymentSuccess,
 }) => {
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [reference, setReference] = useState('');
   const [authorizationUrl, setAuthorizationUrl] = useState('');
@@ -126,7 +129,15 @@ export const PaystackPaymentModal: React.FC<PaystackPaymentModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
+      <View
+        style={[
+          styles.overlay,
+          {
+            paddingTop: Math.max(insets.top, 20),
+            paddingBottom: Math.max(insets.bottom, 20),
+          },
+        ]}
+      >
         <View style={styles.card}>
           {/* Header */}
           <View style={styles.paystackHeader}>
@@ -141,6 +152,8 @@ export const PaystackPaymentModal: React.FC<PaystackPaymentModalProps> = ({
               <Text style={styles.closeBtnText}>✕</Text>
             </TouchableOpacity>
           </View>
+
+          <ScrollView style={{ maxHeight: 520 }} showsVerticalScrollIndicator={false}>
 
           {loading ? (
             <View style={styles.loadingBox}>
@@ -218,6 +231,7 @@ export const PaystackPaymentModal: React.FC<PaystackPaymentModalProps> = ({
               </View>
             </View>
           )}
+          </ScrollView>
         </View>
       </View>
     </Modal>

@@ -8,6 +8,7 @@ import {
   ScrollView,
   Linking,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { Brand } from '../constants/brand';
 
@@ -22,6 +23,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({
   onClose,
   orderNumber,
 }) => {
+  const insets = useSafeAreaInsets();
   const handleCall = () => {
     Linking.openURL(`tel:${Brand.contact.phone.replace(/\s+/g, '')}`);
   };
@@ -42,7 +44,7 @@ export const SupportModal: React.FC<SupportModalProps> = ({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.sheetContainer}>
+        <View style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           {/* Header */}
           <View style={styles.sheetHeader}>
             <View>
@@ -54,7 +56,11 @@ export const SupportModal: React.FC<SupportModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.scrollBody} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={styles.scrollBody}
+            contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 12, 24) }}
+            showsVerticalScrollIndicator={false}
+          >
             {orderNumber && (
               <View style={styles.orderContextCard}>
                 <Text style={styles.orderContextLabel}>Inquiry Regarding</Text>
