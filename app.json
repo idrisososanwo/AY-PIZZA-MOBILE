@@ -29,7 +29,16 @@
     "plugins": [
       "expo-status-bar",
       "expo-secure-store",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#2b1a12"
+        }
+      ]
     ],
     "extra": {
       "router": {

@@ -12,7 +12,13 @@ import {
   Platform,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+
+// Keep native splash screen visible until initial app data is ready
+SplashScreen.preventAutoHideAsync().catch(() => {
+  /* Ignore unhandled rejection in web/test environments */
+});
 import { Colors } from './src/constants/colors';
 import { Brand } from './src/constants/brand';
 import { FoodImages } from './src/constants/images';
@@ -129,6 +135,9 @@ export default function App() {
       } finally {
         if (isMounted) {
           setLoading(false);
+          SplashScreen.hideAsync().catch(() => {
+            /* Ignore in web/test environments */
+          });
         }
       }
     }
@@ -448,9 +457,11 @@ export default function App() {
               customer={customerProfile}
               categories={categories}
               popularProducts={pizzaProducts}
+              allProducts={products}
               fulfillmentType={cartState.fulfillmentType}
               selectedLandmark={cartState.selectedLandmark}
               activeOrders={guestOrders}
+              selectedCategorySlug={selectedCategorySlug}
               onSelectCategory={(slug) => {
                 setSelectedCategorySlug(slug);
                 setActiveTab('menu');
@@ -463,6 +474,12 @@ export default function App() {
               }
               onOpenFulfillmentPicker={() => setLandmarkPickerVisible(true)}
               onExploreMenu={() => setActiveTab('menu')}
+              onToggleFulfillmentType={(type) => {
+                cartStore.setFulfillmentType(type);
+                if (type === 'delivery' && !cartState.selectedLandmark) {
+                  setLandmarkPickerVisible(true);
+                }
+              }}
             />
           ) : activeTab === 'menu' ? (
             /* TAB 2: MENU CATALOG SCREEN */

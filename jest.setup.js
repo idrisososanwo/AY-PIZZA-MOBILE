@@ -35,6 +35,12 @@ jest.mock('expo-notifications', () => ({
   AndroidImportance: { MAX: 5 },
 }));
 
+// Mock for expo-splash-screen
+jest.mock('expo-splash-screen', () => ({
+  preventAutoHideAsync: jest.fn(async () => true),
+  hideAsync: jest.fn(async () => true),
+}));
+
 // Mock for expo-device
 jest.mock('expo-device', () => ({
   isDevice: true,

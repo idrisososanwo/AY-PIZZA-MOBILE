@@ -14,14 +14,17 @@ import { Product, ProductCategory } from '../types/catalog';
 import { CustomerProfile } from '../domains/customer/customer-types';
 import { GuestReceiptRecord } from '../domains/order/guest-receipt-store';
 import { DeliveryLandmark, FulfillmentType } from '../types/delivery';
+import { Radius, Shadows, Typography } from '../constants/theme';
 
-interface HomeScreenProps {
+export interface HomeScreenProps {
   customer: CustomerProfile | null;
   categories: ProductCategory[];
   popularProducts: Product[];
+  allProducts?: Product[];
   fulfillmentType: FulfillmentType;
   selectedLandmark: DeliveryLandmark | null;
   activeOrders: GuestReceiptRecord[];
+  selectedCategorySlug?: string;
   onSelectCategory: (categorySlug: string) => void;
   onOpenSearch: () => void;
   onOpenProductDetail: (product: Product) => void;
@@ -29,15 +32,18 @@ interface HomeScreenProps {
   onTrackOrder: (orderId: string, receiptToken: string) => void;
   onOpenFulfillmentPicker: () => void;
   onExploreMenu: () => void;
+  onToggleFulfillmentType?: (type: FulfillmentType) => void;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   customer,
   categories,
   popularProducts,
+  allProducts,
   fulfillmentType,
   selectedLandmark,
   activeOrders,
+  selectedCategorySlug = 'all',
   onSelectCategory,
   onOpenSearch,
   onOpenProductDetail,
@@ -45,69 +51,165 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onTrackOrder,
   onOpenFulfillmentPicker,
   onExploreMenu,
+  onToggleFulfillmentType,
 }) => {
   const isDelivery = fulfillmentType === 'delivery';
-  const latestActiveOrder = activeOrders.length > 0 ? activeOrders[0] : null;
+  const latestActiveOrder = activeOrders && activeOrders.length > 0 ? activeOrders[0] : null;
+
+  // Determine user first name for friendly greeting
+  const firstName = customer?.fullName ? customer.fullName.trim().split(/\s+/)[0] || null : null;
+
+  // Combined product pool (falls back to popularProducts if allProducts is not supplied)
+  const productCatalog = allProducts && allProducts.length > 0 ? allProducts : popularProducts;
+
+  // Filter products shown on Home based on the active category
+  const displayedProducts =
+    selectedCategorySlug && selectedCategorySlug !== 'all'
+      ? productCatalog.filter((p) => p.categorySlug === selectedCategorySlug).slice(0, 6)
+      : popularProducts.length > 0
+      ? popularProducts.slice(0, 6)
+      : productCatalog.slice(0, 6);
 
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
+      testID="home-screen-scroll"
     >
-      {/* 1. GREETING & FULFILLMENT BAR */}
-      <View style={styles.topContextBar}>
-        <View style={styles.greetingContainer}>
-          <Text style={styles.greetingSubtext}>Welcome to AY Pizza</Text>
-          <Text style={styles.greetingTitle}>
-            {customer?.fullName ? `Hello, ${customer.fullName.split(' ')[0]} 👋` : 'Craving Fresh Pizza? 🍕'}
-          </Text>
+      {/* 1. DELIVERY / PICKUP SEGMENTED HEADER */}
+      <View style={styles.fulfillmentCard}>
+        {/* Fulfillment Type Segmented Selector */}
+        <View style={styles.segmentContainer}>
+          <TouchableOpacity
+            style={[
+              styles.segmentTab,
+              isDelivery && styles.segmentTabActiveDelivery,
+            ]}
+            onPress={() => onToggleFulfillmentType && onToggleFulfillmentType('delivery')}
+            activeOpacity={0.8}
+            testID="fulfillment-delivery-btn"
+          >
+            <Text style={styles.segmentIcon}>🛵</Text>
+            <Text
+              style={[
+                styles.segmentLabel,
+                isDelivery && styles.segmentLabelActiveDelivery,
+              ]}
+            >
+              Delivery
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.segmentTab,
+              !isDelivery && styles.segmentTabActivePickup,
+            ]}
+            onPress={() => onToggleFulfillmentType && onToggleFulfillmentType('pickup')}
+            activeOpacity={0.8}
+            testID="fulfillment-pickup-btn"
+          >
+            <Text style={styles.segmentIcon}>🏬</Text>
+            <Text
+              style={[
+                styles.segmentLabel,
+                !isDelivery && styles.segmentLabelActivePickup,
+              ]}
+            >
+              Pickup
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Fulfillment context selector button */}
-        <TouchableOpacity
-          style={styles.fulfillmentPill}
-          onPress={onOpenFulfillmentPicker}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.fulfillmentEmoji}>{isDelivery ? '🛵' : '🏬'}</Text>
-          <View style={styles.fulfillmentTextContainer}>
-            <Text style={styles.fulfillmentLabel}>
-              {isDelivery ? 'Delivery' : 'Pickup'}
-            </Text>
-            <Text style={styles.fulfillmentTarget} numberOfLines={1}>
-              {isDelivery ? (selectedLandmark ? selectedLandmark.name : 'Select Landmark') : 'King Jaja Hall'}
+        {/* Fulfillment Location Context Bar */}
+        {isDelivery ? (
+          <TouchableOpacity
+            style={styles.locationRow}
+            onPress={onOpenFulfillmentPicker}
+            activeOpacity={0.8}
+            testID="delivery-location-row"
+          >
+            <View style={styles.locationPinCircle}>
+              <Text style={styles.locationPinIcon}>📍</Text>
+            </View>
+            <View style={styles.locationTextContainer}>
+              <Text style={styles.locationHeaderTag}>DELIVERY DESTINATION</Text>
+              <Text style={styles.locationName} numberOfLines={1}>
+                {selectedLandmark ? selectedLandmark.name : 'Select Delivery Landmark'}
+              </Text>
+              <Text style={styles.locationSubtext}>
+                ₦{Brand.fulfillment.campusDeliveryFee} Flat Campus Delivery • ~25–35 mins
+              </Text>
+            </View>
+            <View style={styles.changeActionBadge}>
+              <Text style={styles.changeActionText}>Change ▾</Text>
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.locationRow} testID="pickup-location-row">
+            <View style={[styles.locationPinCircle, styles.locationPinCirclePickup]}>
+              <Text style={styles.locationPinIcon}>🏬</Text>
+            </View>
+            <View style={styles.locationTextContainer}>
+              <Text style={[styles.locationHeaderTag, styles.locationHeaderTagPickup]}>
+                PICKUP STAND
+              </Text>
+              <Text style={styles.locationName} numberOfLines={1}>
+                {Brand.location.address}
+              </Text>
+              <Text style={styles.locationSubtext}>
+                Free Pickup • Ready for collection in ~15 mins
+              </Text>
+            </View>
+          </View>
+        )}
+      </View>
+
+      {/* 2. BRAND GREETING & SEARCH BAR */}
+      <View style={styles.greetingSection}>
+        <View style={styles.greetingHeaderRow}>
+          <View style={styles.greetingTextColumn}>
+            <Text style={styles.greetingSubtitle}>Fresh Oven-Baked • UNILAG</Text>
+            <Text style={styles.greetingTitle}>
+              {firstName ? `Hello, ${firstName} 👋` : 'Welcome to AY Pizza 🍕'}
             </Text>
           </View>
-          <Text style={styles.fulfillmentCaret}>▾</Text>
+          <View style={styles.kitchenStatusBadge}>
+            <View style={styles.statusLiveDot} />
+            <Text style={styles.kitchenStatusText}>Kitchen Open</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.searchBarButton}
+          onPress={onOpenSearch}
+          activeOpacity={0.85}
+          testID="home-search-button"
+        >
+          <Text style={styles.searchIcon}>🔍</Text>
+          <Text style={styles.searchPlaceholder}>
+            Search pizzas, shakes, toppings, burgers...
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {/* 2. SEARCH BAR ENTRY POINT */}
-      <TouchableOpacity
-        style={styles.searchBarButton}
-        onPress={onOpenSearch}
-        activeOpacity={0.85}
-      >
-        <Text style={styles.searchIcon}>🔍</Text>
-        <Text style={styles.searchPlaceholder}>Search pizzas, shakes, toppings, burgers...</Text>
-      </TouchableOpacity>
-
-      {/* 3. ACTIVE ORDER BANNER (IF ANY ACTIVE ORDER EXISTS) */}
+      {/* 3. ACTIVE ORDER LIVE TRACKING STRIP (IF ANY ACTIVE ORDER EXISTS) */}
       {latestActiveOrder && (
         <TouchableOpacity
           style={styles.activeOrderCard}
           onPress={() => onTrackOrder(latestActiveOrder.orderId, latestActiveOrder.receiptToken)}
-          activeOpacity={0.85}
+          activeOpacity={0.88}
+          testID="active-order-card"
         >
           <View style={styles.activeOrderLeft}>
-            <View style={styles.pulsingDot} />
-            <View>
+            <View style={styles.pulsingIndicator} />
+            <View style={{ flex: 1 }}>
               <Text style={styles.activeOrderTitle}>
-                Active Order #{latestActiveOrder.orderNumber}
+                Order #{latestActiveOrder.orderNumber} in Progress
               </Text>
               <Text style={styles.activeOrderSubtitle}>
-                Baking hot & fresh at King Jaja oven
+                Baking fresh at King Jaja oven • Tap to track live
               </Text>
             </View>
           </View>
@@ -117,36 +219,57 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </TouchableOpacity>
       )}
 
-      {/* 4. HERO PROMOTIONAL BANNER */}
-      <View style={styles.heroCard}>
+      {/* 4. TASTEFUL BRAND-LED HERO CAMPAIGN (NO FAKE DISCOUNTS) */}
+      <View style={styles.heroCard} testID="brand-hero-card">
         <Image
           source={FoodImages.heroBanner}
           style={styles.heroImage}
           resizeMode="cover"
         />
         <View style={styles.heroOverlay}>
-          <View style={styles.heroBadge}>
-            <Text style={styles.heroBadgeText}>⚡ HOT FROM JAX OVEN</Text>
+          <View style={styles.heroBadgeRow}>
+            <View style={styles.heroBadge}>
+              <Text style={styles.heroBadgeText}>⚡ STONE-OVEN BAKED</Text>
+            </View>
+            <View style={styles.heroSecondaryBadge}>
+              <Text style={styles.heroSecondaryBadgeText}>Opposite King Jaja</Text>
+            </View>
           </View>
-          <Text style={styles.heroTitle}>Authentic Artisan Pizza</Text>
-          <Text style={styles.heroSubtitle}>
-            Hand-tossed daily with 100% mozzarella, baked right on UNILAG campus opposite King Jaja Hall.
-          </Text>
-          <TouchableOpacity
-            style={styles.heroActionBtn}
-            onPress={onExploreMenu}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.heroActionText}>Order Fresh Pizza 🍕</Text>
-          </TouchableOpacity>
+
+          <View style={styles.heroCopyBlock}>
+            <Text style={styles.heroTitle}>Artisan Oven-Baked Pizza</Text>
+            <Text style={styles.heroSubtitle}>
+              Proofed dough rolled daily, rich marinara sauce, and 100% melted mozzarella. Baked fresh right on campus.
+            </Text>
+          </View>
+
+          <View style={styles.heroFooter}>
+            <TouchableOpacity
+              style={styles.heroActionBtn}
+              onPress={onExploreMenu}
+              activeOpacity={0.85}
+              testID="hero-explore-menu-btn"
+            >
+              <Text style={styles.heroActionText}>Explore Full Menu 🍕</Text>
+            </TouchableOpacity>
+
+            <View style={styles.heroPillsRow}>
+              <Text style={styles.heroPillText}>🍕 5 Crust Sizes</Text>
+              <Text style={styles.heroPillDot}>•</Text>
+              <Text style={styles.heroPillText}>🛵 Hostel Delivery</Text>
+            </View>
+          </View>
         </View>
       </View>
 
-      {/* 5. QUICK MENU CATEGORIES */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Explore Menu</Text>
+      {/* 5. FOOD CATEGORIES SCROLLER */}
+      <View style={styles.sectionHeaderRow}>
+        <View>
+          <Text style={styles.sectionTitle}>Explore Categories</Text>
+          <Text style={styles.sectionSubtitle}>Select a section to view menu items</Text>
+        </View>
         <TouchableOpacity onPress={onExploreMenu} activeOpacity={0.7}>
-          <Text style={styles.viewAllText}>View All →</Text>
+          <Text style={styles.viewAllText}>Full Menu →</Text>
         </TouchableOpacity>
       </View>
 
@@ -154,87 +277,140 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.categoriesScroll}
+        testID="home-categories-scroll"
       >
         <TouchableOpacity
-          style={styles.categoryChip}
+          style={[
+            styles.categoryPill,
+            selectedCategorySlug === 'all' ? styles.categoryPillActive : styles.categoryPillInactive,
+          ]}
           onPress={() => onSelectCategory('all')}
           activeOpacity={0.8}
         >
           <Text style={styles.categoryEmoji}>🍽️</Text>
-          <Text style={styles.categoryLabel}>All Items</Text>
+          <Text
+            style={[
+              styles.categoryLabel,
+              selectedCategorySlug === 'all' && styles.categoryLabelActive,
+            ]}
+          >
+            All Menu
+          </Text>
         </TouchableOpacity>
+
         {categories.map((cat) => {
+          const isSelected = selectedCategorySlug === cat.slug;
           let emoji = '🍕';
           if (cat.slug.includes('shake') || cat.slug.includes('icecream')) emoji = '🍨';
-          else if (cat.slug.includes('burger')) emoji = '🍔';
-          else if (cat.slug.includes('shawarma')) emoji = '🌯';
+          else if (cat.slug.includes('fast') || cat.slug.includes('burger')) emoji = '🍔';
           else if (cat.slug.includes('drink')) emoji = '🥤';
-          else if (cat.slug.includes('side')) emoji = '🍟';
 
           return (
             <TouchableOpacity
               key={cat.id}
-              style={styles.categoryChip}
+              style={[
+                styles.categoryPill,
+                isSelected ? styles.categoryPillActive : styles.categoryPillInactive,
+              ]}
               onPress={() => onSelectCategory(cat.slug)}
               activeOpacity={0.8}
             >
               <Text style={styles.categoryEmoji}>{emoji}</Text>
-              <Text style={styles.categoryLabel}>{cat.name}</Text>
+              <Text
+                style={[
+                  styles.categoryLabel,
+                  isSelected && styles.categoryLabelActive,
+                ]}
+              >
+                {cat.name}
+              </Text>
             </TouchableOpacity>
           );
         })}
       </ScrollView>
 
-      {/* 6. POPULAR AT UNILAG (FEATURED PIZZAS) */}
-      <View style={[styles.sectionHeader, { marginTop: 22 }]}>
-        <Text style={styles.sectionTitle}>Popular at UNILAG 🔥</Text>
+      {/* 6. FEATURED MENU / CAMPUS FAVOURITES */}
+      <View style={[styles.sectionHeaderRow, { marginTop: 18 }]}>
+        <View>
+          <Text style={styles.sectionTitle}>
+            {selectedCategorySlug === 'all'
+              ? 'Campus Favourites 🔥'
+              : `${categories.find((c) => c.slug === selectedCategorySlug)?.name || 'Featured Items'} 🍕`}
+          </Text>
+          <Text style={styles.sectionSubtitle}>
+            Freshly prepared to order right at King Jaja stand
+          </Text>
+        </View>
         <TouchableOpacity onPress={onExploreMenu} activeOpacity={0.7}>
-          <Text style={styles.viewAllText}>See Menu →</Text>
+          <Text style={styles.viewAllText}>View All →</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.popularGrid}>
-        {popularProducts.slice(0, 6).map((prod) => {
+      <View style={styles.productGrid} testID="home-product-grid">
+        {displayedProducts.map((prod) => {
           const foodImg = getProductImage(prod.name);
           const hasSizes = prod.sizes && prod.sizes.length > 0;
+          const isAvailable = prod.isAvailable;
 
           return (
             <TouchableOpacity
               key={prod.id}
-              style={styles.popularCard}
+              style={[styles.productCard, !isAvailable && styles.productCardUnavailable]}
               onPress={() => onOpenProductDetail(prod)}
-              activeOpacity={0.85}
+              activeOpacity={0.88}
+              testID={`product-card-${prod.id}`}
             >
-              <View style={styles.popularImageContainer}>
-                <Image source={foodImg} style={styles.popularImage} resizeMode="cover" />
-                <View style={styles.popularBadge}>
-                  <Text style={styles.popularBadgeText}>TOP PICK</Text>
-                </View>
+              <View style={styles.productImageContainer}>
+                <Image source={foodImg} style={styles.productImage} resizeMode="cover" />
+                {isAvailable ? (
+                  <View style={styles.stockBadge}>
+                    <Text style={styles.stockBadgeText}>In Stock</Text>
+                  </View>
+                ) : (
+                  <View style={styles.outOfStockBadge}>
+                    <Text style={styles.outOfStockBadgeText}>Sold Out</Text>
+                  </View>
+                )}
               </View>
 
-              <View style={styles.popularCardBody}>
-                <Text style={styles.popularTitle} numberOfLines={1}>
-                  {prod.name}
-                </Text>
-                <Text style={styles.popularDesc} numberOfLines={2}>
-                  {prod.description}
-                </Text>
+              <View style={styles.productCardBody}>
+                <View>
+                  <Text style={styles.productTitle} numberOfLines={1}>
+                    {prod.name}
+                  </Text>
+                  <Text style={styles.productDesc} numberOfLines={2}>
+                    {prod.description}
+                  </Text>
+                </View>
 
-                <View style={styles.popularCardFooter}>
-                  <View style={styles.popularPriceContainer}>
-                    <Text style={styles.popularFromText}>From</Text>
-                    <Text style={styles.popularPrice} numberOfLines={1}>
+                <View style={styles.productCardFooter}>
+                  <View style={styles.priceContainer}>
+                    <Text style={styles.pricePrefix}>
+                      {hasSizes ? 'From' : 'Price'}
+                    </Text>
+                    <Text style={styles.priceValue} numberOfLines={1}>
                       ₦{prod.basePrice.toLocaleString()}
                     </Text>
                   </View>
 
                   <TouchableOpacity
-                    style={styles.popularAddBtn}
+                    style={[
+                      styles.productActionBtn,
+                      !isAvailable && styles.productActionBtnDisabled,
+                      hasSizes ? styles.productActionBtnCustomize : styles.productActionBtnAdd,
+                    ]}
                     onPress={() => onOpenCustomizer(prod)}
+                    disabled={!isAvailable}
                     activeOpacity={0.8}
+                    testID={`add-btn-${prod.id}`}
                   >
-                    <Text style={styles.popularAddBtnText}>
-                      {hasSizes ? 'Customize ⚙️' : '+ Add'}
+                    <Text
+                      style={[
+                        styles.productActionBtnText,
+                        hasSizes ? styles.productActionBtnTextRed : styles.productActionBtnTextYellow,
+                      ]}
+                    >
+                      {!isAvailable ? 'Unavailable' : hasSizes ? 'Customize ⚙️' : '+ Add'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -244,19 +420,55 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         })}
       </View>
 
-      {/* 7. CAMPUS ASSURANCE FOOTER */}
-      <View style={styles.campusAssuranceCard}>
-        <Text style={styles.assuranceEmoji}>🏛️</Text>
-        <Text style={styles.assuranceTitle}>AY Pizza UNILAG Campus Promise</Text>
-        <Text style={styles.assuranceText}>
-          Fresh dough rolled daily, 100% real cheese, and fast hostel delivery across King Jaja, Mariere, Moremi, Madam Tinubu, Biobaku, and all UNILAG faculties.
-        </Text>
-        <View style={styles.locationPill}>
-          <Text style={styles.locationPillText}>📍 Stand: {Brand.location.address}</Text>
+      {/* 7. UNILAG CAMPUS TRUST & OPERATIONAL INFO */}
+      <View style={styles.campusTrustCard} testID="campus-trust-card">
+        <View style={styles.campusTrustHeader}>
+          <Text style={styles.campusTrustEmoji}>🏛️</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.campusTrustTitle}>AY Pizza UNILAG Campus Stand</Text>
+            <Text style={styles.campusTrustSubtitle}>
+              Fresh oven-baked artisan pizza, thick shakes & fast hostel delivery
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.campusDivider} />
+
+        <View style={styles.campusInfoGrid}>
+          <View style={styles.campusInfoItem}>
+            <Text style={styles.campusInfoIcon}>📍</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.campusInfoLabel}>Location</Text>
+              <Text style={styles.campusInfoValue}>{Brand.location.address}</Text>
+            </View>
+          </View>
+
+          <View style={styles.campusInfoItem}>
+            <Text style={styles.campusInfoIcon}>⏰</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.campusInfoLabel}>Hours</Text>
+              <Text style={styles.campusInfoValue}>10:00 AM – 9:00 PM WAT (Daily)</Text>
+            </View>
+          </View>
+
+          <View style={styles.campusInfoItem}>
+            <Text style={styles.campusInfoIcon}>📞</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.campusInfoLabel}>Direct Line / WhatsApp</Text>
+              <Text style={styles.campusInfoValue}>{Brand.contact.phone}</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.hostelNoticeBox}>
+          <Text style={styles.hostelNoticeText}>
+            🛵 Prompt hostel delivery across King Jaja, Mariere, Moremi, Madam Tinubu, Biobaku, El-Kanemi, and all UNILAG faculties.
+          </Text>
         </View>
       </View>
 
-      <View style={{ height: 28 }} />
+      {/* Bottom spacer ensuring clearance over bottom tab bar */}
+      <View style={{ height: 32 }} />
     </ScrollView>
   );
 };
@@ -268,85 +480,179 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 24,
+    paddingBottom: 32,
   },
-  topContextBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+
+  // 1. FULFILLMENT SELECTOR CARD
+  fulfillmentCard: {
+    backgroundColor: Colors.cardWhite,
+    borderRadius: Radius.lg,
+    padding: 12,
     marginBottom: 14,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    ...Shadows.card,
   },
-  greetingContainer: {
+  segmentContainer: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surfaceCream,
+    borderRadius: Radius.pill,
+    padding: 3,
+    marginBottom: 10,
+  },
+  segmentTab: {
     flex: 1,
-    marginRight: 10,
-  },
-  greetingSubtext: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    letterSpacing: 0.2,
-  },
-  greetingTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: Colors.charcoal,
-    marginTop: 2,
-  },
-  fulfillmentPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(39, 33, 31, 0.1)',
-    maxWidth: 160,
-    flexShrink: 1,
-    shadowColor: '#27211F',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    justifyContent: 'center',
+    paddingVertical: 7,
+    borderRadius: Radius.pill,
+    gap: 6,
   },
-  fulfillmentEmoji: {
+  segmentTabActiveDelivery: {
+    backgroundColor: Colors.primaryRed,
+    ...Shadows.card,
+  },
+  segmentTabActivePickup: {
+    backgroundColor: Colors.freshGreen,
+    ...Shadows.card,
+  },
+  segmentIcon: {
     fontSize: 14,
-    marginRight: 6,
   },
-  fulfillmentTextContainer: {
-    flex: 1,
-  },
-  fulfillmentLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: Colors.primaryRed,
-    textTransform: 'uppercase',
-  },
-  fulfillmentTarget: {
-    fontSize: 11,
+  segmentLabel: {
+    fontSize: 12,
     fontWeight: '700',
     color: Colors.charcoal,
   },
-  fulfillmentCaret: {
+  segmentLabelActiveDelivery: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  segmentLabelActivePickup: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+  },
+  locationPinCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.softTomato,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  locationPinCirclePickup: {
+    backgroundColor: 'rgba(40, 122, 75, 0.12)',
+  },
+  locationPinIcon: {
+    fontSize: 16,
+  },
+  locationTextContainer: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
+  },
+  locationHeaderTag: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: Colors.primaryRed,
+    letterSpacing: 0.5,
+  },
+  locationHeaderTagPickup: {
+    color: Colors.freshGreen,
+  },
+  locationName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.charcoal,
+    marginTop: 1,
+  },
+  locationSubtext: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  changeActionBadge: {
+    backgroundColor: Colors.warmCream,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  changeActionText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primaryRed,
+  },
+
+  // 2. GREETING & SEARCH
+  greetingSection: {
+    marginBottom: 14,
+  },
+  greetingHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  greetingTextColumn: {
+    flex: 1,
+    marginRight: 10,
+  },
+  greetingSubtitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primaryRed,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  greetingTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: Colors.charcoal,
+    marginTop: 2,
+    letterSpacing: -0.3,
+  },
+  kitchenStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(40, 122, 75, 0.1)',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(40, 122, 75, 0.25)',
+  },
+  statusLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.freshGreen,
+    marginRight: 5,
+  },
+  kitchenStatusText: {
     fontSize: 10,
-    color: Colors.textMuted,
-    marginLeft: 4,
+    fontWeight: '800',
+    color: Colors.freshGreen,
   },
   searchBarButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    backgroundColor: Colors.cardWhite,
+    borderRadius: Radius.md,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    marginBottom: 14,
     borderWidth: 1,
-    borderColor: 'rgba(39, 33, 31, 0.08)',
-    shadowColor: '#27211F',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
+    borderColor: Colors.borderLight,
+    ...Shadows.card,
   },
   searchIcon: {
     fontSize: 16,
@@ -356,24 +662,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textMuted,
     fontWeight: '500',
+    flex: 1,
   },
+
+  // 3. ACTIVE ORDER BANNER
   activeOrderCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    backgroundColor: Colors.cardWhite,
+    borderRadius: Radius.md,
     padding: 12,
     marginBottom: 14,
     borderLeftWidth: 4,
     borderLeftColor: Colors.primaryRed,
     borderWidth: 1,
-    borderColor: 'rgba(39, 33, 31, 0.08)',
-    shadowColor: Colors.primaryRed,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 5,
-    elevation: 3,
+    borderColor: Colors.borderLight,
+    ...Shadows.card,
   },
   activeOrderLeft: {
     flexDirection: 'row',
@@ -381,7 +686,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 10,
   },
-  pulsingDot: {
+  pulsingIndicator: {
     width: 10,
     height: 10,
     borderRadius: 5,
@@ -402,25 +707,23 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryRed,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
   },
   trackBtnText: {
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '800',
   },
+
+  // 4. BRAND CAMPAIGN HERO
   heroCard: {
-    height: 190,
-    borderRadius: 18,
+    height: 200,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
-    marginBottom: 20,
-    backgroundColor: '#27211F',
+    marginBottom: 18,
+    backgroundColor: Colors.charcoal,
     position: 'relative',
-    shadowColor: '#27211F',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 4,
+    ...Shadows.card,
   },
   heroImage: {
     width: '100%',
@@ -428,162 +731,228 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
-    opacity: 0.72,
+    opacity: 0.65,
   },
   heroOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(39, 33, 31, 0.45)',
+    backgroundColor: 'rgba(39, 33, 31, 0.48)',
     padding: 16,
     justifyContent: 'space-between',
   },
+  heroBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   heroBadge: {
-    alignSelf: 'flex-start',
     backgroundColor: Colors.goldenYellow,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: Radius.xs,
   },
   heroBadgeText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '900',
-    color: '#27211F',
-    letterSpacing: 0.5,
+    color: Colors.charcoal,
+    letterSpacing: 0.4,
+  },
+  heroSecondaryBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.xs,
+  },
+  heroSecondaryBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  heroCopyBlock: {
+    marginTop: 4,
   },
   heroTitle: {
-    fontSize: 22,
+    fontSize: 21,
     fontWeight: '900',
     color: '#FFFFFF',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    letterSpacing: -0.3,
   },
   heroSubtitle: {
     fontSize: 12,
     color: '#FFF8EC',
     lineHeight: 16,
     fontWeight: '500',
-    maxWidth: '92%',
+    marginTop: 4,
+    maxWidth: '95%',
+  },
+  heroFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    flexWrap: 'wrap',
+    gap: 8,
   },
   heroActionBtn: {
-    alignSelf: 'flex-start',
     backgroundColor: Colors.primaryRed,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
-    shadowColor: Colors.primaryRed,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: Radius.pill,
+    ...Shadows.hover,
   },
   heroActionText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '800',
   },
-  sectionHeader: {
+  heroPillsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  heroPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFF3DD',
+  },
+  heroPillDot: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+
+  // 5. CATEGORIES
+  sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems: 'flex-end',
+    marginBottom: 10,
   },
   sectionTitle: {
     fontSize: 17,
     fontWeight: '900',
     color: Colors.charcoal,
   },
+  sectionSubtitle: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
   viewAllText: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '800',
     color: Colors.primaryRed,
   },
   categoriesScroll: {
     paddingRight: 10,
     gap: 8,
+    paddingVertical: 2,
     marginBottom: 14,
   },
-  categoryChip: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+  categoryPill: {
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: Radius.pill,
+    ...Shadows.card,
+  },
+  categoryPillInactive: {
+    backgroundColor: Colors.cardWhite,
     borderWidth: 1,
-    borderColor: 'rgba(39, 33, 31, 0.08)',
-    minWidth: 80,
-    shadowColor: '#27211F',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    borderColor: Colors.borderLight,
+  },
+  categoryPillActive: {
+    backgroundColor: Colors.primaryRed,
+    borderWidth: 1,
+    borderColor: Colors.primaryRed,
   },
   categoryEmoji: {
-    fontSize: 22,
-    marginBottom: 4,
+    fontSize: 16,
+    marginRight: 6,
   },
   categoryLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: Colors.charcoal,
   },
-  popularGrid: {
+  categoryLabelActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+
+  // 6. FEATURED MENU GRID
+  productGrid: {
     gap: 12,
   },
-  popularCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+  productCard: {
+    backgroundColor: Colors.cardWhite,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(39, 33, 31, 0.08)',
-    shadowColor: '#27211F',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    borderColor: Colors.borderLight,
+    ...Shadows.card,
     flexDirection: 'row',
   },
-  popularImageContainer: {
-    width: 100,
-    height: 100,
-    position: 'relative',
-    backgroundColor: '#FFF3DD',
+  productCardUnavailable: {
+    opacity: 0.6,
   },
-  popularImage: {
+  productImageContainer: {
+    width: 96,
+    height: 96,
+    position: 'relative',
+    backgroundColor: Colors.surfaceCream,
+  },
+  productImage: {
     width: '100%',
     height: '100%',
   },
-  popularBadge: {
+  stockBadge: {
     position: 'absolute',
     top: 6,
     left: 6,
-    backgroundColor: Colors.goldenYellow,
+    backgroundColor: 'rgba(40, 122, 75, 0.92)',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: Radius.xs,
   },
-  popularBadgeText: {
+  stockBadgeText: {
     fontSize: 8,
     fontWeight: '900',
-    color: '#27211F',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
   },
-  popularCardBody: {
+  outOfStockBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: Colors.primaryRed,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.xs,
+  },
+  outOfStockBadgeText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+  },
+  productCardBody: {
     flex: 1,
     padding: 10,
     justifyContent: 'space-between',
     minWidth: 0,
   },
-  popularTitle: {
-    fontSize: 15,
+  productTitle: {
+    fontSize: 14,
     fontWeight: '800',
     color: Colors.charcoal,
   },
-  popularDesc: {
-    fontSize: 12,
+  productDesc: {
+    fontSize: 11,
     color: Colors.textSecondary,
-    lineHeight: 16,
+    lineHeight: 15,
     marginTop: 2,
   },
-  popularCardFooter: {
+  productCardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -591,70 +960,119 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
   },
-  popularPriceContainer: {
+  priceContainer: {
     flexShrink: 1,
     minWidth: 0,
   },
-  popularFromText: {
-    fontSize: 10,
+  pricePrefix: {
+    fontSize: 9,
     color: Colors.textMuted,
-    fontWeight: '600',
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
-  popularPrice: {
+  priceValue: {
+    ...Typography.pricePrimary,
     fontSize: 15,
-    fontWeight: '900',
-    color: Colors.primaryRed,
   },
-  popularAddBtn: {
-    backgroundColor: Colors.softTomato,
-    paddingHorizontal: 10,
+  productActionBtn: {
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(201, 35, 43, 0.2)',
-  },
-  popularAddBtnText: {
-    color: Colors.primaryRed,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  campusAssuranceCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(39, 33, 31, 0.08)',
+    borderRadius: Radius.pill,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  assuranceEmoji: {
-    fontSize: 28,
-    marginBottom: 6,
+  productActionBtnCustomize: {
+    backgroundColor: Colors.softTomato,
+    borderWidth: 1,
+    borderColor: 'rgba(201, 35, 43, 0.25)',
   },
-  assuranceTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: Colors.charcoal,
-    textAlign: 'center',
-    marginBottom: 6,
+  productActionBtnAdd: {
+    backgroundColor: Colors.goldenYellow,
   },
-  assuranceText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    lineHeight: 17,
-    textAlign: 'center',
-    marginBottom: 10,
+  productActionBtnDisabled: {
+    backgroundColor: Colors.borderMedium,
   },
-  locationPill: {
-    backgroundColor: Colors.warmCream,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  locationPillText: {
+  productActionBtnText: {
     fontSize: 11,
+    fontWeight: '800',
+  },
+  productActionBtnTextRed: {
+    color: Colors.primaryRed,
+  },
+  productActionBtnTextYellow: {
+    color: Colors.charcoal,
+  },
+
+  // 7. CAMPUS TRUST CARD
+  campusTrustCard: {
+    backgroundColor: Colors.cardWhite,
+    borderRadius: Radius.lg,
+    padding: 16,
+    marginTop: 22,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    ...Shadows.card,
+  },
+  campusTrustHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  campusTrustEmoji: {
+    fontSize: 28,
+    marginRight: 10,
+  },
+  campusTrustTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: Colors.charcoal,
+  },
+  campusTrustSubtitle: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  campusDivider: {
+    height: 1,
+    backgroundColor: Colors.borderLight,
+    marginVertical: 12,
+  },
+  campusInfoGrid: {
+    gap: 8,
+  },
+  campusInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  campusInfoIcon: {
+    fontSize: 14,
+    marginRight: 8,
+    marginTop: 1,
+  },
+  campusInfoLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+  },
+  campusInfoValue: {
+    fontSize: 12,
     fontWeight: '700',
     color: Colors.charcoal,
+    marginTop: 1,
+  },
+  hostelNoticeBox: {
+    backgroundColor: Colors.surfaceCream,
+    borderRadius: Radius.sm,
+    padding: 10,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 179, 35, 0.3)',
+  },
+  hostelNoticeText: {
+    fontSize: 11,
+    color: Colors.charcoal,
+    lineHeight: 16,
+    fontWeight: '600',
   },
 });
-

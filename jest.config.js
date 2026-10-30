@@ -5,6 +5,7 @@ module.exports = {
   setupFiles: ['<rootDir>/jest.setup.js'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    '\\.(jpg|jpeg|png|gif|webp|svg)$': '<rootDir>/jest.imageMock.js',
   },
   transform: {
     '^.+\\.tsx?$': ['ts-jest', {
