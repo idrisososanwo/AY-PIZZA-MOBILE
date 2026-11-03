@@ -33,7 +33,7 @@ describe('Phase 5.2: Branded Splash Screen & Homepage Redesign', () => {
       );
       expect(splashPlugin).toBeDefined();
       expect(splashPlugin[1]).toMatchObject({
-        backgroundColor: '#2b1a12',
+        backgroundColor: '#B91C1C',
         image: './assets/splash-icon.png',
         imageWidth: 200,
         resizeMode: 'contain',
@@ -47,7 +47,7 @@ describe('Phase 5.2: Branded Splash Screen & Homepage Redesign', () => {
       );
       expect(splashPlugin).toBeDefined();
       expect(splashPlugin[1]).toMatchObject({
-        backgroundColor: '#2b1a12',
+        backgroundColor: '#B91C1C',
         image: './assets/splash-icon.png',
         imageWidth: 200,
         resizeMode: 'contain',

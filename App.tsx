@@ -42,6 +42,7 @@ import { HomeScreen } from './src/components/HomeScreen';
 import { AccountScreen } from './src/components/AccountScreen';
 import { OrdersScreen } from './src/components/OrdersScreen';
 import { LandmarkPickerModal } from './src/components/LandmarkPickerModal';
+import { BrandedLaunchScreen } from './src/components/BrandedLaunchScreen';
 import { GuestReceiptStore, GuestReceiptRecord } from './src/domains/order/guest-receipt-store';
 import {
   fetchAuthenticatedRole,
@@ -56,13 +57,17 @@ import { DeliveryLandmark } from './src/types/delivery';
 export default function App() {
   const [activeTab, setActiveTab] = useState<CustomerTab>('home');
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
-  const [isKitchenMode, setIsKitchenMode] = useState<boolean>(false);
+  const [isKitchenMode, setIsKitchenMode] = useState<boolean>(
+    () => typeof window !== 'undefined' && window.location?.pathname === '/kitchen'
+  );
   const [authenticatedRole, setAuthenticatedRole] = useState<UserRole | null>(null);
   const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(null);
   const [guestOrders, setGuestOrders] = useState<GuestReceiptRecord[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isLaunchScreenActive, setIsLaunchScreenActive] = useState<boolean>(true);
+  const [isAppReady, setIsAppReady] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategorySlug, setSelectedCategorySlug] = useState('all');
   const [landmarkPickerVisible, setLandmarkPickerVisible] = useState(false);
@@ -117,6 +122,14 @@ export default function App() {
   useEffect(() => {
     let isMounted = true;
 
+    // Safety timeout: guarantee launch screen always transitions even on network hang/outage (10s max)
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) {
+        setIsAppReady(true);
+        setLoading(false);
+      }
+    }, 10000);
+
     async function loadCatalog() {
       try {
         setLoading(true);
@@ -135,19 +148,12 @@ export default function App() {
       } finally {
         if (isMounted) {
           setLoading(false);
-          SplashScreen.hideAsync().catch(() => {
-            /* Ignore in web/test environments */
-          });
+          setIsAppReady(true);
         }
       }
     }
 
     loadCatalog();
-
-    // Check for web route /kitchen (dedicated staff endpoint)
-    if (typeof window !== 'undefined' && window.location?.pathname === '/kitchen') {
-      setIsKitchenMode(true);
-    }
 
     // Load recent guest orders
     GuestReceiptStore.getAllReceipts().then((records: GuestReceiptRecord[]) => {
@@ -155,6 +161,7 @@ export default function App() {
     });
 
     // Subscribe to auth state changes and fetch profile
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshCustomer();
 
     const authSub = subscribeAuthState((role) => {
@@ -185,6 +192,7 @@ export default function App() {
 
     return () => {
       isMounted = false;
+      clearTimeout(safetyTimer);
       unsubscribeCart();
       authSub.unsubscribe();
       profSub.unsubscribe();
@@ -364,7 +372,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <StatusBar style="dark" />
+        <StatusBar style={isKitchenMode ? 'light' : isLaunchScreenActive ? 'light' : 'dark'} />
 
         {/* 1. TOP BRAND HEADER */}
         <View style={styles.topHeader}>
@@ -521,7 +529,7 @@ export default function App() {
                   <Text style={styles.emptySearchEmoji}>🔍</Text>
                   <Text style={styles.emptySearchTitle}>No matching products</Text>
                   <Text style={styles.emptySearchSubtitle}>
-                    No items found for "{searchQuery}". Try a different keyword or category.
+                    {`No items found for "${searchQuery}". Try a different keyword or category.`}
                   </Text>
                   <TouchableOpacity
                     style={styles.resetSearchBtn}
@@ -696,6 +704,14 @@ export default function App() {
           onClose={() => setLandmarkPickerVisible(false)}
         />
       </SafeAreaView>
+
+      {/* STAGE 2: CUSTOM ANIMATED AY PIZZA BRAND INTRODUCTION */}
+      {isLaunchScreenActive && (
+        <BrandedLaunchScreen
+          isAppReady={isAppReady}
+          onAnimationComplete={() => setIsLaunchScreenActive(false)}
+        />
+      )}
     </SafeAreaProvider>
   );
 }

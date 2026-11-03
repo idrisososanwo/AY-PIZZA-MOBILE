@@ -14,7 +14,7 @@
     "android": {
       "package": "ng.aypizza.app",
       "adaptiveIcon": {
-        "backgroundColor": "#2b1a12",
+        "backgroundColor": "#B91C1C",
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
@@ -36,7 +36,11 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#2b1a12"
+          "backgroundColor": "#B91C1C",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#B91C1C"
+          }
         }
       ]
     ],

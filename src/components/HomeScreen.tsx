@@ -67,8 +67,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     selectedCategorySlug && selectedCategorySlug !== 'all'
       ? productCatalog.filter((p) => p.categorySlug === selectedCategorySlug).slice(0, 6)
       : popularProducts.length > 0
-      ? popularProducts.slice(0, 6)
-      : productCatalog.slice(0, 6);
+        ? popularProducts.slice(0, 6)
+        : productCatalog.slice(0, 6);
 
   return (
     <ScrollView
@@ -348,7 +348,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       <View style={styles.productGrid} testID="home-product-grid">
         {displayedProducts.map((prod) => {
-          const foodImg = getProductImage(prod.name);
+          const foodImg = getProductImage(prod);
           const hasSizes = prod.sizes && prod.sizes.length > 0;
           const isAvailable = prod.isAvailable;
 

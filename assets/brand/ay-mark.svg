@@ -1,0 +1,200 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <filter id="sticker-glow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="rgba(0,0,0,0.25)" />
+    </filter>
+  </defs>
+
+  <!-- ======================================================== -->
+  <!-- CONCEPT 3: AY PIZZA & ICE CREAM MASTER BRAND MONOGRAM    -->
+  <!-- ======================================================== -->
+  <g id="AY-Concept3-Emblem" filter="url(#sticker-glow)">
+
+    <!-- LAYER 1: OUTER GOLDEN-ORANGE CONTOUR (#F59E0B) -->
+    <path d="M 188 64
+             C 172 64 158 74 150 88
+             L 76 270
+             C 66 295 84 324 112 324
+             L 126 324
+             C 142 324 156 312 162 298
+             L 186 236
+             L 218 236
+             C 214 282 222 320 234 336
+             C 246 352 268 352 284 340
+             C 298 328 316 280 324 238
+             L 338 274
+             C 346 295 366 314 388 322
+             C 410 330 432 320 440 300
+             L 468 188
+             C 476 156 462 128 434 116
+             C 424 88 398 64 366 64
+             C 334 64 308 84 296 112
+             C 278 82 240 64 188 64 Z"
+          fill="#F59E0B" />
+
+    <!-- LAYER 2: DARK CRIMSON BACKING FILL (#7B1516) -->
+    <path d="M 188 72
+             C 176 72 164 80 158 92
+             L 84 274
+             C 76 294 90 316 112 316
+             L 126 316
+             C 138 316 150 306 156 294
+             L 184 226
+             L 226 226
+             C 222 276 230 312 240 328
+             C 250 342 268 342 280 332
+             C 292 322 308 276 316 232
+             L 334 272
+             C 342 290 358 306 378 314
+             C 398 322 418 314 426 296
+             L 454 186
+             C 462 156 450 132 426 122
+             C 416 96 392 72 364 72
+             C 334 72 312 90 300 116
+             C 284 88 248 72 188 72 Z"
+          fill="#7B1516" />
+
+    <!-- LAYER 3: THICK CREAM PILLOWY CONTOUR STROKE (#FFF7E6) -->
+    <path d="M 188 82
+             C 180 82 172 88 168 96
+             L 94 278
+             C 88 292 98 306 114 306
+             L 126 306
+             C 134 306 142 300 146 292
+             L 182 216
+             L 234 216
+             C 232 268 238 304 246 318
+             C 254 330 268 330 276 322
+             C 286 314 300 272 308 226
+             L 330 270
+             C 336 284 350 298 368 304
+             C 386 310 404 304 412 288
+             L 438 184
+             C 446 156 436 136 414 128
+             C 406 104 386 82 360 82
+             C 334 82 316 98 306 122
+             C 292 96 258 82 188 82 Z"
+          fill="#FFF7E6" />
+
+    <!-- ======================================================== -->
+    <!-- GLYPH A: PIZZA SLICE LETTER A                            -->
+    <!-- ======================================================== -->
+    <g id="Glyph-A">
+      <!-- White/Cream Pill Frame (Outline legs of A) -->
+      <path d="M 190 92
+               C 202 92 212 102 208 114
+               L 162 254
+               C 158 266 146 274 134 274
+               C 122 274 112 264 116 252
+               L 162 112
+               C 166 100 178 92 190 92 Z"
+            fill="#FFF7E6" />
+      <path d="M 190 92
+               C 202 92 212 102 216 114
+               L 262 254
+               C 266 266 256 274 244 274
+               C 232 274 222 264 218 252
+               L 172 112
+               C 168 100 178 92 190 92 Z"
+            fill="#FFF7E6" />
+
+      <!-- Pizza Slice Body (Triangle Facing Up) -->
+      <polygon points="190,118 136,254 244,254" fill="#FBBF24" />
+      <polygon points="190,128 144,248 236,248" fill="#F59E0B" />
+
+      <!-- Melted Golden Cheese Drips across Bottom Crossbar -->
+      <path d="M 134 250
+               C 142 252 148 252 154 250
+               C 158 262 164 278 170 278
+               C 176 278 180 262 184 250
+               C 192 252 200 252 208 250
+               C 212 266 218 284 224 284
+               C 230 284 234 266 238 250
+               C 242 252 246 252 250 250
+               L 246 242 L 138 242 Z"
+            fill="#FBBF24" />
+
+      <!-- Pepperoni Accents (3 Slices) -->
+      <g id="Pepperoni-Accents">
+        <!-- Pepperoni 1: Top Vertex -->
+        <circle cx="190" cy="168" r="14" fill="#991B1B" />
+        <circle cx="187" cy="165" r="2.5" fill="#FFF7E6" opacity="0.85" />
+        
+        <!-- Pepperoni 2: Lower Left -->
+        <circle cx="162" cy="226" r="13" fill="#991B1B" />
+        <circle cx="160" cy="224" r="2.2" fill="#FFF7E6" opacity="0.85" />
+
+        <!-- Pepperoni 3: Lower Right -->
+        <circle cx="218" cy="226" r="13" fill="#991B1B" />
+        <circle cx="216" cy="224" r="2.2" fill="#FFF7E6" opacity="0.85" />
+      </g>
+
+      <!-- Inner Triangular Counter (Negative Space) -->
+      <polygon points="190,146 166,208 214,208" fill="#7B1516" />
+    </g>
+
+    <!-- ======================================================== -->
+    <!-- GLYPH Y: SOFT-SERVE WAFFLE CONE MONOGRAM                 -->
+    <!-- ======================================================== -->
+    <g id="Glyph-Y">
+      <!-- Left Branch & Center Stem of Y (Warm Cream Pill Stroke) -->
+      <path d="M 270 114
+               C 282 104 296 112 300 126
+               L 334 230
+               L 334 296
+               C 334 308 324 318 312 318
+               C 300 318 290 308 290 296
+               L 290 244
+               L 256 138
+               C 252 126 258 116 270 114 Z"
+            fill="#FFF7E6" />
+
+      <!-- Right Branch: Waffle Cone -->
+      <g id="Waffle-Cone">
+        <!-- Amber Cone Body -->
+        <polygon points="340,192 396,192 368,284" fill="#F59E0B" />
+        <!-- Cone Rim Collar -->
+        <rect x="336" y="186" width="64" height="10" rx="4" fill="#D97706" />
+        <!-- Diamond Waffle Lattice Lines -->
+        <path d="M 346 196 L 388 238
+                 M 352 218 L 380 248
+                 M 390 196 L 348 238
+                 M 384 218 L 356 248"
+              stroke="#7B1516"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              opacity="0.55" />
+      </g>
+
+      <!-- Soft-Serve Cream Swirl Peak -->
+      <g id="Soft-Serve-Cream">
+        <!-- Bottom Swirl Layer -->
+        <path d="M 334 192
+                 C 328 178 344 168 362 172
+                 C 374 166 390 170 404 168
+                 C 412 174 410 190 374 196 Z"
+              fill="#FFF7E6" />
+        <!-- Middle Swirl Layer -->
+        <path d="M 342 172
+                 C 338 156 354 146 372 150
+                 C 384 144 398 148 406 156
+                 C 408 168 396 174 366 176 Z"
+              fill="#FFF7E6" />
+        <!-- Top Swirl Peak curving right -->
+        <path d="M 358 150
+                 C 356 132 370 118 386 112
+                 C 398 106 406 116 398 126
+                 C 392 134 382 142 368 152 Z"
+              fill="#FFF7E6" />
+        <!-- Strawberry Drizzle Accents -->
+        <path d="M 384 116 C 378 132 374 150 376 168
+                 M 398 136 C 394 154 388 172 386 188"
+              stroke="#991B1B"
+              stroke-width="2.8"
+              stroke-linecap="round"
+              fill="none"
+              opacity="0.65" />
+      </g>
+    </g>
+  </g>
+</svg>

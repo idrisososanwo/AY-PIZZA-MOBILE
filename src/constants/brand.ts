@@ -2,7 +2,9 @@
  * AY Pizza Restaurant Metadata and Operational Constants
  */
 export const Brand = {
-  name: 'AY Pizza & Ice Cream Corner',
+  name: 'AY Pizza & Ice Cream',
+  officialWordmark: 'AY PIZZA & ICE CREAM',
+  officialTagline: 'ARTISAN PIZZAS & FRESH SOFT-SERVE',
   shortName: 'AY Pizza',
   tagline: 'Hand-tossed pizzas made fresh daily, creamy ice cream & refreshing drinks',
   location: {

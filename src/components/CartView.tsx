@@ -7,10 +7,12 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 import { Brand } from '../constants/brand';
+import { getProductImage } from '../constants/images';
 import { CartState, CartItem } from '../domains/cart/cart-types';
 import { cartStore } from '../domains/cart/cart-store';
 import { DeliveryLandmark } from '../types/delivery';
@@ -202,6 +204,13 @@ export const CartView: React.FC<CartViewProps> = ({
 
               {cartState.items.map((item) => (
                 <View key={item.id} style={styles.cartItemRow}>
+                  <View style={styles.itemThumbContainer}>
+                    <Image
+                      source={getProductImage(item.productName)}
+                      style={styles.itemThumb}
+                      resizeMode="cover"
+                    />
+                  </View>
                   <View style={styles.itemMainInfo}>
                     <View style={styles.itemNameRow}>
                       <Text style={styles.itemTitle}>{item.productName}</Text>
@@ -565,10 +574,25 @@ const styles = StyleSheet.create({
   },
   cartItemRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderLight,
+  },
+  itemThumbContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: Colors.surfaceCream,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  itemThumb: {
+    width: '100%',
+    height: '100%',
   },
   itemMainInfo: {
     flex: 1,

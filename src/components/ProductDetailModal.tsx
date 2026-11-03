@@ -27,7 +27,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     (product.sizes && product.sizes.length > 0) ||
     (product.customizationGroups && product.customizationGroups.length > 0);
 
-  const foodImage = getProductImage(product.name);
+  const foodImage = getProductImage(product);
 
   return (
     <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>

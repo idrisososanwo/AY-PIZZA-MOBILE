@@ -65,14 +65,91 @@ jest.mock('react-native', () => ({
   },
   StyleSheet: {
     create: (styles) => styles,
+    absoluteFill: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
+  },
+  AccessibilityInfo: {
+    isReduceMotionEnabled: jest.fn(async () => false),
+  },
+  useWindowDimensions: () => ({ width: 390, height: 844 }),
+  Animated: {
+    Value: jest.fn((val) => ({
+      interpolate: jest.fn(),
+      setValue: jest.fn(),
+      _value: val,
+    })),
+    timing: jest.fn(() => ({
+      start: (cb) => cb && cb({ finished: true }),
+    })),
+    parallel: jest.fn(() => ({
+      start: (cb) => cb && cb({ finished: true }),
+    })),
+    sequence: jest.fn(() => ({
+      start: (cb) => cb && cb({ finished: true }),
+    })),
+    delay: jest.fn(() => ({
+      start: (cb) => cb && cb({ finished: true }),
+    })),
+    loop: jest.fn(() => ({
+      start: (cb) => cb && cb({ finished: true }),
+      stop: jest.fn(),
+    })),
+    View: 'Animated.View',
+    Image: 'Animated.Image',
+    Text: 'Animated.Text',
+  },
+  Easing: {
+    out: jest.fn((e) => e),
+    inOut: jest.fn((e) => e),
+    quad: jest.fn(),
+    cubic: jest.fn(),
+    bezier: jest.fn(),
   },
   View: 'View',
   Text: 'Text',
+  Image: 'Image',
   TouchableOpacity: 'TouchableOpacity',
   ScrollView: 'ScrollView',
   Modal: 'Modal',
   ActivityIndicator: 'ActivityIndicator',
   TextInput: 'TextInput',
+  Alert: {
+    alert: jest.fn(),
+  },
 }));
+
+// Mock for react-native-svg
+jest.mock('react-native-svg', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const React = require('react');
+  const createMockComponent = (name) => {
+    const Component = (props) => React.createElement(name, props, props ? props.children : null);
+    Component.displayName = name;
+    return Component;
+  };
+  return {
+    __esModule: true,
+    default: createMockComponent('Svg'),
+    Svg: createMockComponent('Svg'),
+    Path: createMockComponent('Path'),
+    G: createMockComponent('G'),
+    Defs: createMockComponent('Defs'),
+    LinearGradient: createMockComponent('LinearGradient'),
+    RadialGradient: createMockComponent('RadialGradient'),
+    Stop: createMockComponent('Stop'),
+    Circle: createMockComponent('Circle'),
+    Rect: createMockComponent('Rect'),
+    ClipPath: createMockComponent('ClipPath'),
+    Mask: createMockComponent('Mask'),
+    Text: createMockComponent('Text'),
+    TSpan: createMockComponent('TSpan'),
+    Use: createMockComponent('Use'),
+    Symbol: createMockComponent('Symbol'),
+    Pattern: createMockComponent('Pattern'),
+    Line: createMockComponent('Line'),
+    Polyline: createMockComponent('Polyline'),
+    Polygon: createMockComponent('Polygon'),
+  };
+});
+
 
 

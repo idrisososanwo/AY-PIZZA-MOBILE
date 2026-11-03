@@ -22,7 +22,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     (product.customizationGroups && product.customizationGroups.length > 0);
 
   const formattedPrice = `₦${product.basePrice.toLocaleString()}`;
-  const foodImage = getProductImage(product.name);
+  const foodImage = getProductImage(product);
 
   return (
     <TouchableOpacity

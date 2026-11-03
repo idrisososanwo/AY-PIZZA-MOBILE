@@ -1,18 +1,31 @@
 /**
- * AY Pizza — Visual Identity & Design Tokens (Redesign Edition)
+ * AY Pizza & Ice Cream — Visual Identity & Design Tokens (Phase 5.2.3 Edition)
  * 
- * Bold, youthful, energetic, and appetite-focused visual system:
- * - Primary Red (#C9232B): Brand crest, primary action buttons, active navigation, key highlights
- * - Golden Yellow (#F4B323): Value badges, hot promotions, rating accents, cheese highlights
- * - Warm Cream (#FFF8EC): Appetizing spacious background
- * - Charcoal (#27211F): High-contrast readable typography and icons
- * - Fresh Green (#287A4B): Genuine availability badges, in-stock indicators, verified success
- * - Soft Tomato (#FCE5E2): Subtle badge backgrounds, light card accents, soft highlights
- * - Card White (#FFFFFF): Elevated, crisp cards on warm cream canvas
+ * Approved Brand Palette:
+ * - Primary Pizza Red (#B91C1C): Launch screen, brand signature, primary highlights
+ * - Chocolate Brown (#3E2723): Rich dessert accents, typography contrast, waffle fluting
+ * - Warm Cream (#FFF7E6): Premium appetising canvas, high-contrast brand glyphs
+ * - Golden Orange (#F59E0B): Baked crust, waffle cone, aura rings, accents
+ * - Charcoal (#1F1F1F): High-contrast readable typography
  */
 
+export const BrandPalette = {
+  primaryPizzaRed: '#B91C1C',
+  chocolateBrown: '#3E2723',
+  warmCream: '#FFF7E6',
+  goldenOrange: '#F59E0B',
+  charcoal: '#1F1F1F',
+} as const;
+
 export const Colors = {
-  // Core Brand Palette
+  // Phase 5.2.3 Visual Direction Tokens
+  brandRed: BrandPalette.primaryPizzaRed,
+  chocolateBrown: BrandPalette.chocolateBrown,
+  brandCream: BrandPalette.warmCream,
+  goldenOrange: BrandPalette.goldenOrange,
+  brandCharcoal: BrandPalette.charcoal,
+
+  // Core Brand Palette (with backwards compatibility)
   primaryRed: '#C9232B',
   goldenYellow: '#F4B323',
   warmCream: '#FFF8EC',

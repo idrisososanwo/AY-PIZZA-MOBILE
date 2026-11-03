@@ -44,6 +44,9 @@ supabase/.temp/
 # typescript
 *.tsbuildinfo
 
+# scratch and temp work
+scratch/
+
 # generated native folders
 /ios
 /android

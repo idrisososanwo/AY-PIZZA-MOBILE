@@ -10,9 +10,11 @@ import {
   Switch,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
+import { getProductImage } from '../constants/images';
 import { Product } from '../types/catalog';
 import { CartItem } from '../domains/cart/cart-types';
 import {
@@ -78,6 +80,13 @@ const CustomizerModalContent: React.FC<CustomizerModalContentProps> = ({
         <View style={styles.modalContent}>
           {/* Header */}
           <View style={styles.modalHeader}>
+            <View style={styles.headerThumbContainer}>
+              <Image
+                source={getProductImage(product)}
+                style={styles.headerThumb}
+                resizeMode="cover"
+              />
+            </View>
             <View style={styles.headerTitleContainer}>
               <Text style={styles.eyebrow}>
                 {existingCartItem ? 'EDIT ORDER ITEM' : 'CUSTOMIZE PRODUCT'}
@@ -398,12 +407,25 @@ const styles = StyleSheet.create({
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     padding: 18,
     backgroundColor: Colors.cardWhite,
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderLight,
+  },
+  headerThumbContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: Colors.surfaceCream,
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  headerThumb: {
+    width: '100%',
+    height: '100%',
   },
   headerTitleContainer: {
     flex: 1,

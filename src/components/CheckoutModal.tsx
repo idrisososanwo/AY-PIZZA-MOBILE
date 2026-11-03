@@ -11,9 +11,11 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
+import { getProductImage } from '../constants/images';
 import { CartState } from '../domains/cart/cart-types';
 import { orderService, CustomerCheckoutDetails, AuthoritativePriceDiscrepancyError } from '../domains/order/order-service';
 import { GuestReceiptStore } from '../domains/order/guest-receipt-store';
@@ -306,6 +308,13 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
               {cartState.items.map((item) => (
                 <View key={item.id} style={styles.itemRow}>
+                  <View style={styles.checkoutItemThumbContainer}>
+                    <Image
+                      source={getProductImage(item.productName)}
+                      style={styles.checkoutItemThumb}
+                      resizeMode="cover"
+                    />
+                  </View>
                   <View style={{ flex: 1, marginRight: 8 }}>
                     <Text style={styles.itemName}>
                       {item.quantity}x {item.productName}
@@ -519,10 +528,25 @@ const styles = StyleSheet.create({
   },
   itemRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(39, 33, 31, 0.06)',
+  },
+  checkoutItemThumbContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: Colors.surfaceCream,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(39, 33, 31, 0.08)',
+  },
+  checkoutItemThumb: {
+    width: '100%',
+    height: '100%',
   },
   itemName: {
     color: Colors.charcoal,
