@@ -26,8 +26,11 @@ export interface PaymentInitializationResult {
   error?: string;
 }
 
+export type PaymentVerificationOutcome = 'SUCCESS' | 'FAILED' | 'PENDING' | 'UNKNOWN';
+
 export interface PaymentVerificationResult {
   success: boolean;
+  outcome?: PaymentVerificationOutcome;
   orderId?: string;
   orderNumber?: string;
   status?: OrderStatus;
@@ -36,6 +39,12 @@ export interface PaymentVerificationResult {
   channel?: string;
   error?: string;
   alreadySettled?: boolean;
+  simulated?: boolean;
+}
+
+export interface StagingSimulationParams {
+  orderId: string;
+  receiptToken?: string;
 }
 
 /**
@@ -46,4 +55,5 @@ export interface PaymentProvider {
   readonly gatewayName: string;
   initializePayment(params: PaymentInitializationParams): Promise<PaymentInitializationResult>;
   verifyPayment(reference: string, orderId?: string, receiptToken?: string): Promise<PaymentVerificationResult>;
+  simulateStagingPayment?(params: StagingSimulationParams): Promise<PaymentVerificationResult>;
 }

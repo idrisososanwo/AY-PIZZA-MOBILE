@@ -111,9 +111,16 @@ export class CustomerService {
           id,
           customer_id,
           landmark_id,
+          title,
           detailed_address,
+          estate_or_hostel,
+          room_or_plot,
+          street_address,
+          area,
           contact_phone,
           delivery_notes,
+          latitude,
+          longitude,
           is_default,
           created_at,
           updated_at,
@@ -134,10 +141,17 @@ export class CustomerService {
         id: row.id,
         customerId: row.customer_id,
         landmarkId: row.landmark_id,
+        title: row.title || 'Saved Address',
         landmarkName: row.delivery_landmarks?.name || 'UNILAG Campus',
         detailedAddress: row.detailed_address,
+        estateOrHostel: row.estate_or_hostel || null,
+        roomOrPlot: row.room_or_plot || null,
+        streetAddress: row.street_address || null,
+        area: row.area || null,
         contactPhone: row.contact_phone,
         deliveryNotes: row.delivery_notes,
+        latitude: row.latitude || null,
+        longitude: row.longitude || null,
         isDefault: Boolean(row.is_default),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -186,18 +200,32 @@ export class CustomerService {
         .insert({
           customer_id: userId,
           landmark_id: input.landmarkId,
+          title: input.title?.trim() || 'Saved Address',
           detailed_address: input.detailedAddress.trim(),
+          estate_or_hostel: input.estateOrHostel?.trim() || null,
+          room_or_plot: input.roomOrPlot?.trim() || null,
+          street_address: input.streetAddress?.trim() || null,
+          area: input.area?.trim() || null,
           contact_phone: input.contactPhone.trim(),
           delivery_notes: input.deliveryNotes?.trim() || null,
+          latitude: input.latitude || null,
+          longitude: input.longitude || null,
           is_default: Boolean(input.isDefault),
         })
         .select(`
           id,
           customer_id,
           landmark_id,
+          title,
           detailed_address,
+          estate_or_hostel,
+          room_or_plot,
+          street_address,
+          area,
           contact_phone,
           delivery_notes,
+          latitude,
+          longitude,
           is_default,
           created_at,
           updated_at,
@@ -217,10 +245,17 @@ export class CustomerService {
         id: raw.id,
         customerId: raw.customer_id,
         landmarkId: raw.landmark_id,
+        title: raw.title || 'Saved Address',
         landmarkName: raw.delivery_landmarks?.name || 'UNILAG Campus',
         detailedAddress: raw.detailed_address,
+        estateOrHostel: raw.estate_or_hostel || null,
+        roomOrPlot: raw.room_or_plot || null,
+        streetAddress: raw.street_address || null,
+        area: raw.area || null,
         contactPhone: raw.contact_phone,
         deliveryNotes: raw.delivery_notes,
+        latitude: raw.latitude || null,
+        longitude: raw.longitude || null,
         isDefault: Boolean(raw.is_default),
         createdAt: raw.created_at,
         updatedAt: raw.updated_at,
@@ -255,10 +290,17 @@ export class CustomerService {
       const payload: Record<string, any> = {
         updated_at: new Date().toISOString(),
       };
+      if (updates.title !== undefined) payload.title = updates.title.trim();
       if (updates.landmarkId) payload.landmark_id = updates.landmarkId;
       if (updates.detailedAddress !== undefined) payload.detailed_address = updates.detailedAddress.trim();
+      if (updates.estateOrHostel !== undefined) payload.estate_or_hostel = updates.estateOrHostel?.trim() || null;
+      if (updates.roomOrPlot !== undefined) payload.room_or_plot = updates.roomOrPlot?.trim() || null;
+      if (updates.streetAddress !== undefined) payload.street_address = updates.streetAddress?.trim() || null;
+      if (updates.area !== undefined) payload.area = updates.area?.trim() || null;
       if (updates.contactPhone !== undefined) payload.contact_phone = updates.contactPhone.trim();
       if (updates.deliveryNotes !== undefined) payload.delivery_notes = updates.deliveryNotes?.trim() || null;
+      if (updates.latitude !== undefined) payload.latitude = updates.latitude;
+      if (updates.longitude !== undefined) payload.longitude = updates.longitude;
       if (updates.isDefault !== undefined) payload.is_default = updates.isDefault;
 
       const { error } = await (supabase

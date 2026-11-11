@@ -77,8 +77,10 @@ export const EXTRA_PIZZA_TOPPINGS: CustomizationOption[] = [
   { id: '55555555-5555-5555-5555-555555555504', groupId: '44444444-4444-4444-4444-444444444401', name: 'Extra Pepperoni', price: 1000, isAvailable: true, displayOrder: 4 },
 ];
 
+export const HALF_AND_HALF_OPTION_ID = '55555555-5555-5555-5555-555555555505';
+
 export const HALF_AND_HALF_OPTION: CustomizationOption = {
-  id: '55555555-5555-5555-5555-555555555505',
+  id: HALF_AND_HALF_OPTION_ID,
   groupId: '44444444-4444-4444-4444-444444444402',
   name: 'Half & Half Pizza',
   price: 1000, // Base surcharge for Regular/Standard; +₦1500 for Large/Queen/King

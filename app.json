@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "scheme": "aypizza",
     "ios": {
       "supportsTablet": true,
@@ -13,6 +13,7 @@
     },
     "android": {
       "package": "ng.aypizza.app",
+      "softwareKeyboardLayoutMode": "pan",
       "adaptiveIcon": {
         "backgroundColor": "#B91C1C",
         "foregroundImage": "./assets/android-icon-foreground.png"
@@ -20,7 +21,9 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
@@ -30,6 +33,12 @@
       "expo-status-bar",
       "expo-secure-store",
       "expo-notifications",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "AY Pizza uses your location to calculate delivery fees and find your closest delivery landmark."
+        }
+      ],
       [
         "expo-splash-screen",
         {

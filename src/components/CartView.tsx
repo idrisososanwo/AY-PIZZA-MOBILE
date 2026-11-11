@@ -16,26 +16,45 @@ import { getProductImage } from '../constants/images';
 import { CartState, CartItem } from '../domains/cart/cart-types';
 import { cartStore } from '../domains/cart/cart-store';
 import { DeliveryLandmark } from '../types/delivery';
+import { Product } from '../types/catalog';
+import { SEEDED_PRODUCTS } from '../domains/catalog/catalog-repository';
 import { LandmarkPickerModal } from './LandmarkPickerModal';
+import { SavedAddressesModal } from './SavedAddressesModal';
+import { deliveryPricingEngine } from '../domains/delivery/delivery-pricing-engine';
+import { Radius, Shadows } from '../constants/theme';
 
-interface CartViewProps {
+export interface CartViewProps {
   cartState: CartState;
+  userId?: string;
   onExploreMenu: () => void;
   onEditItem: (item: CartItem) => void;
   onProceedToCheckout?: () => void;
+  suggestedProducts?: Product[];
+  onOpenCustomizer?: (product: Product) => void;
 }
 
 export const CartView: React.FC<CartViewProps> = ({
   cartState,
+  userId,
   onExploreMenu,
   onEditItem,
   onProceedToCheckout,
+  suggestedProducts,
+  onOpenCustomizer,
 }) => {
   const insets = useSafeAreaInsets();
   const [landmarkPickerVisible, setLandmarkPickerVisible] = useState(false);
+  const [savedAddressesVisible, setSavedAddressesVisible] = useState(false);
+  const [isThrottled, setIsThrottled] = useState(false);
 
   const hasItems = cartState.items.length > 0;
   const isDelivery = cartState.fulfillmentType === 'delivery';
+
+  // Fallback suggested items for empty cart
+  const suggestedList =
+    suggestedProducts && suggestedProducts.length > 0
+      ? suggestedProducts
+      : SEEDED_PRODUCTS.slice(0, 3);
 
   const handleClearCart = () => {
     Alert.alert(
@@ -50,6 +69,26 @@ export const CartView: React.FC<CartViewProps> = ({
         },
       ]
     );
+  };
+
+  const handleQuantityUpdate = async (itemId: string, newQuantity: number) => {
+    if (isThrottled) return;
+    setIsThrottled(true);
+    try {
+      await cartStore.updateQuantity(itemId, newQuantity);
+    } finally {
+      setTimeout(() => setIsThrottled(false), 200);
+    }
+  };
+
+  const handleRemoveItem = async (itemId: string) => {
+    if (isThrottled) return;
+    setIsThrottled(true);
+    try {
+      await cartStore.removeItem(itemId);
+    } finally {
+      setTimeout(() => setIsThrottled(false), 200);
+    }
   };
 
   return (
@@ -108,30 +147,82 @@ export const CartView: React.FC<CartViewProps> = ({
 
         {!hasItems ? (
           /* Empty Cart State */
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>🛒</Text>
-            <Text style={styles.emptyTitle}>Your cart is currently empty</Text>
+          <View style={styles.emptyContainer} testID="cart-empty-state">
+            <View style={styles.emptyIconCircle}>
+              <Text style={styles.emptyIcon}>🛒</Text>
+            </View>
+            <Text style={styles.emptyTitle}>Your Cart is Empty</Text>
             <Text style={styles.emptySubtitle}>
-              Explore our freshly baked artisan pizzas, rich thick shakes, and soft-serve ice cream!
+              Hand-tossed pizzas proofed daily, thick shakes & soft-serve ice cream baked fresh at King Jaja stand.
             </Text>
-            <TouchableOpacity style={styles.exploreBtn} onPress={onExploreMenu} activeOpacity={0.8}>
-              <Text style={styles.exploreBtnText}>Browse AY Pizza Menu 🍕</Text>
+            <TouchableOpacity
+              style={styles.exploreBtn}
+              onPress={onExploreMenu}
+              activeOpacity={0.8}
+              testID="empty-cart-explore-btn"
+            >
+              <Text style={styles.exploreBtnText}>Explore Full Menu 🍕</Text>
             </TouchableOpacity>
+
+            {/* CAMPUS POPULAR SUGGESTIONS SHELF */}
+            {suggestedList.length > 0 && (
+              <View style={styles.suggestionsContainer} testID="empty-cart-suggestions">
+                <View style={styles.suggestionsHeaderRow}>
+                  <Text style={styles.suggestionsTitle}>Popular on Campus 🔥</Text>
+                  <Text style={styles.suggestionsSubtitle}>Quick additions to get started</Text>
+                </View>
+
+                <View style={styles.suggestionsGrid}>
+                  {suggestedList.map((prod) => (
+                    <TouchableOpacity
+                      key={prod.id}
+                      style={styles.suggestionCard}
+                      onPress={() => (onOpenCustomizer ? onOpenCustomizer(prod) : onExploreMenu())}
+                      activeOpacity={0.85}
+                      testID={`suggested-product-${prod.id}`}
+                    >
+                      <Image
+                        source={getProductImage(prod)}
+                        style={styles.suggestionThumb}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.suggestionBody}>
+                        <Text style={styles.suggestionName} numberOfLines={1}>
+                          {prod.name}
+                        </Text>
+                        <Text style={styles.suggestionPrice}>
+                          ₦{prod.basePrice.toLocaleString()}
+                        </Text>
+                      </View>
+                      <View style={styles.suggestionAddBtn}>
+                        <Text style={styles.suggestionAddBtnText}>+ Add</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
           </View>
         ) : (
           /* Active Cart State */
           <>
             {/* Fulfillment Selector */}
-            <View style={styles.card}>
+            <View style={styles.card} testID="cart-fulfillment-card">
               <Text style={styles.cardTitle}>1. Fulfillment Method</Text>
               <View style={styles.segmentedRow}>
                 <TouchableOpacity
                   style={[styles.segmentBtn, isDelivery && styles.segmentBtnActive]}
                   onPress={() => cartStore.setFulfillmentType('delivery')}
                   activeOpacity={0.8}
+                  testID="cart-fulfillment-delivery-btn"
                 >
                   <Text style={[styles.segmentText, isDelivery && styles.segmentTextActive]}>
                     🛵 Campus Delivery
+                  </Text>
+                  <Text style={[styles.segmentBadge, isDelivery && styles.segmentBadgeActive]}>
+                    {cartState.deliveryFee > 0
+                      ? `₦${cartState.deliveryFee.toLocaleString()}`
+                      : 'Flat ₦500'}
                   </Text>
                 </TouchableOpacity>
 
@@ -139,9 +230,13 @@ export const CartView: React.FC<CartViewProps> = ({
                   style={[styles.segmentBtn, !isDelivery && styles.segmentBtnActive]}
                   onPress={() => cartStore.setFulfillmentType('pickup')}
                   activeOpacity={0.8}
+                  testID="cart-fulfillment-pickup-btn"
                 >
                   <Text style={[styles.segmentText, !isDelivery && styles.segmentTextActive]}>
                     🏬 King Jaja Pickup
+                  </Text>
+                  <Text style={[styles.segmentBadge, !isDelivery && styles.segmentBadgeActive]}>
+                    FREE
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -165,11 +260,22 @@ export const CartView: React.FC<CartViewProps> = ({
                     <Text style={styles.changeTag}>Change ▾</Text>
                   </TouchableOpacity>
 
+                  <TouchableOpacity
+                    style={styles.savedAddressesTriggerBtn}
+                    onPress={() => setSavedAddressesVisible(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.savedAddressesTriggerText}>
+                      🏷️ Choose from Saved Addresses
+                    </Text>
+                  </TouchableOpacity>
+
                   <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Room / Detailed Address:</Text>
                   <TextInput
                     style={styles.textInput}
                     placeholder="e.g. King Jaja Hall, Block A, Room 14"
-                    placeholderTextColor="rgba(255, 232, 214, 0.4)"
+                    placeholderTextColor={Colors.textSecondary}
+                    selectionColor={Colors.primaryRed}
                     value={cartState.deliveryAddress}
                     onChangeText={(val) => cartStore.setDeliveryDetails(val, cartState.deliveryNotes)}
                   />
@@ -178,16 +284,17 @@ export const CartView: React.FC<CartViewProps> = ({
                   <TextInput
                     style={styles.textInput}
                     placeholder="e.g. Call when outside the hall gate"
-                    placeholderTextColor="rgba(255, 232, 214, 0.4)"
+                    placeholderTextColor={Colors.textSecondary}
+                    selectionColor={Colors.primaryRed}
                     value={cartState.deliveryNotes}
                     onChangeText={(val) => cartStore.setDeliveryDetails(cartState.deliveryAddress, val)}
                   />
                 </View>
               ) : (
                 <View style={styles.pickupNotice}>
-                  <Text style={styles.pickupNoticeTitle}>🏬 Free Pickup at AY Pizza</Text>
+                  <Text style={styles.pickupNoticeTitle}>🏬 Free Pickup at AY Pizza Stand</Text>
                   <Text style={styles.pickupNoticeBody}>
-                    Pick up directly from the kitchen at {Brand.location.address}. Delivery fee is ₦0.
+                    Pick up directly from the kitchen opposite King Jaja Hall ({Brand.location.address}). Ready in ~15 mins. Delivery fee is strictly ₦0.
                   </Text>
                 </View>
               )}
@@ -203,7 +310,7 @@ export const CartView: React.FC<CartViewProps> = ({
               </View>
 
               {cartState.items.map((item) => (
-                <View key={item.id} style={styles.cartItemRow}>
+                <View key={item.id} style={styles.cartItemRow} testID={`cart-item-${item.id}`}>
                   <View style={styles.itemThumbContainer}>
                     <Image
                       source={getProductImage(item.productName)}
@@ -212,13 +319,29 @@ export const CartView: React.FC<CartViewProps> = ({
                     />
                   </View>
                   <View style={styles.itemMainInfo}>
-                    <View style={styles.itemNameRow}>
-                      <Text style={styles.itemTitle}>{item.productName}</Text>
-                      {item.sizeName && (
-                        <View style={styles.sizePill}>
-                          <Text style={styles.sizePillText}>{item.sizeName}</Text>
-                        </View>
-                      )}
+                    {/* Header Row: Title & Size on left, Price on right */}
+                    <View style={styles.itemHeaderRow}>
+                      <View style={styles.itemNameBlock}>
+                        <Text style={styles.itemTitle} numberOfLines={2}>
+                          {item.productName}
+                        </Text>
+                        {item.sizeName && (
+                          <View style={styles.sizePill}>
+                            <Text style={styles.sizePillText}>{item.sizeName}</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <View style={styles.itemPriceColumn}>
+                        <Text style={styles.itemPriceTotal}>
+                          ₦{item.lineTotal.toLocaleString()}
+                        </Text>
+                        {item.quantity > 1 && (
+                          <Text style={styles.itemPriceUnit}>
+                            ₦{item.unitPrice.toLocaleString()} ea
+                          </Text>
+                        )}
+                      </View>
                     </View>
 
                     {/* Invalid / Unavailable warning */}
@@ -230,19 +353,23 @@ export const CartView: React.FC<CartViewProps> = ({
                       </View>
                     )}
 
-                    {/* Customizations tags */}
+                    {/* Half & Half Breakdown */}
                     {item.halfSecondaryFlavor && (
-                      <Text style={styles.customizationTag}>
-                        🍕 Half & Half: {item.halfSecondaryFlavor}
-                      </Text>
+                      <View style={styles.halfAndHalfTagContainer}>
+                        <Text style={styles.halfAndHalfTagText}>
+                          🍕 Half & Half: {item.productName} + {item.halfSecondaryFlavor}
+                        </Text>
+                      </View>
                     )}
 
+                    {/* Flavors */}
                     {item.flavors && item.flavors.length > 0 && (
                       <Text style={styles.customizationTag}>
                         🍨 Flavors: {item.flavors.join(', ')}
                       </Text>
                     )}
 
+                    {/* Toppings */}
                     {item.customizations
                       .filter((c) => !c.optionId.includes('half-and-half'))
                       .map((c, i) => (
@@ -251,6 +378,7 @@ export const CartView: React.FC<CartViewProps> = ({
                         </Text>
                       ))}
 
+                    {/* Special Instructions */}
                     {item.specialInstructions && (
                       <Text style={styles.instructionsText}>
                         {`📝 "${item.specialInstructions}"`}
@@ -262,44 +390,47 @@ export const CartView: React.FC<CartViewProps> = ({
                       <View style={styles.stepper}>
                         <TouchableOpacity
                           style={styles.stepperBtn}
-                          onPress={() => cartStore.updateQuantity(item.id, item.quantity - 1)}
+                          onPress={() => handleQuantityUpdate(item.id, item.quantity - 1)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          accessibilityLabel="Decrease quantity"
+                          testID={`qty-minus-${item.id}`}
                         >
                           <Text style={styles.stepperBtnText}>−</Text>
                         </TouchableOpacity>
-                        <Text style={styles.stepperQty}>{item.quantity}</Text>
+                        <Text style={styles.stepperQty} testID={`qty-value-${item.id}`}>{item.quantity}</Text>
                         <TouchableOpacity
                           style={styles.stepperBtn}
-                          onPress={() => cartStore.updateQuantity(item.id, item.quantity + 1)}
+                          onPress={() => handleQuantityUpdate(item.id, item.quantity + 1)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          accessibilityLabel="Increase quantity"
+                          testID={`qty-plus-${item.id}`}
                         >
                           <Text style={styles.stepperBtnText}>+</Text>
                         </TouchableOpacity>
                       </View>
 
-                      <TouchableOpacity
-                        style={styles.editBtn}
-                        onPress={() => onEditItem(item)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.editBtnText}>Edit ⚙️</Text>
-                      </TouchableOpacity>
+                      <View style={styles.itemActionButtons}>
+                        <TouchableOpacity
+                          style={styles.editBtn}
+                          onPress={() => onEditItem(item)}
+                          activeOpacity={0.8}
+                          accessibilityLabel={`Edit ${item.productName}`}
+                          testID={`edit-item-${item.id}`}
+                        >
+                          <Text style={styles.editBtnText}>Edit ⚙️</Text>
+                        </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={styles.deleteBtn}
-                        onPress={() => cartStore.removeItem(item.id)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.deleteBtnText}>Remove 🗑️</Text>
-                      </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.deleteBtn}
+                          onPress={() => handleRemoveItem(item.id)}
+                          activeOpacity={0.8}
+                          accessibilityLabel={`Remove ${item.productName}`}
+                          testID={`remove-item-${item.id}`}
+                        >
+                          <Text style={styles.deleteBtnText}>Remove 🗑️</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  </View>
-
-                  <View style={styles.itemPriceColumn}>
-                    <Text style={styles.itemPriceTotal}>
-                      ₦{item.lineTotal.toLocaleString()}
-                    </Text>
-                    <Text style={styles.itemPriceUnit}>
-                      ₦{item.unitPrice.toLocaleString()} each
-                    </Text>
                   </View>
                 </View>
               ))}
@@ -382,6 +513,20 @@ export const CartView: React.FC<CartViewProps> = ({
         onSelectLandmark={(landmark: DeliveryLandmark) => cartStore.setLandmark(landmark)}
         onClose={() => setLandmarkPickerVisible(false)}
       />
+
+      {/* Saved Addresses Modal */}
+      <SavedAddressesModal
+        visible={savedAddressesVisible}
+        userId={userId}
+        onClose={() => setSavedAddressesVisible(false)}
+        onSelectAddress={(addr) => {
+          const lm = deliveryPricingEngine.findLandmark(addr.landmarkId);
+          if (lm) {
+            cartStore.setLandmark(lm);
+          }
+          cartStore.setDeliveryDetails(addr.detailedAddress, addr.deliveryNotes || '');
+        }}
+      />
     </View>
   );
 };
@@ -421,40 +566,158 @@ const styles = StyleSheet.create({
     color: Colors.primaryRed,
     fontWeight: '700',
   },
+  priceChangeBanner: {
+    backgroundColor: '#FFF7E6',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.goldenYellow,
+    marginBottom: 16,
+  },
+  priceChangeInfo: {
+    marginBottom: 8,
+  },
+  priceChangeTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.charcoal,
+    marginBottom: 4,
+  },
+  priceChangeText: {
+    fontSize: 12,
+    color: Colors.charcoal,
+    lineHeight: 16,
+  },
+  acceptPriceBtn: {
+    backgroundColor: Colors.primaryRed,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  acceptPriceBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  // EMPTY CART SCREEN
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 20,
+    paddingVertical: 36,
+    paddingHorizontal: 16,
   },
-  emptyIcon: {
-    fontSize: 60,
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.surfaceCream,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
     marginBottom: 16,
   },
+  emptyIcon: {
+    fontSize: 40,
+  },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 20,
+    fontWeight: '900',
     color: Colors.charcoal,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   emptySubtitle: {
     fontSize: 13,
     color: Colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 19,
-    marginBottom: 24,
+    lineHeight: 18,
+    marginBottom: 20,
+    maxWidth: 300,
   },
   exploreBtn: {
     backgroundColor: Colors.primaryRed,
     paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 24,
+    paddingVertical: 12,
+    borderRadius: Radius.pill,
+    ...Shadows.card,
+    marginBottom: 32,
   },
   exploreBtnText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
     color: '#ffffff',
   },
+  suggestionsContainer: {
+    width: '100%',
+    backgroundColor: Colors.cardWhite,
+    borderRadius: Radius.lg,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    ...Shadows.card,
+  },
+  suggestionsHeaderRow: {
+    marginBottom: 12,
+  },
+  suggestionsTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: Colors.charcoal,
+  },
+  suggestionsSubtitle: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  suggestionsGrid: {
+    gap: 10,
+  },
+  suggestionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceCream,
+    borderRadius: 10,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  suggestionThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    marginRight: 10,
+  },
+  suggestionBody: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
+  },
+  suggestionName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.charcoal,
+  },
+  suggestionPrice: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.primaryRed,
+    marginTop: 2,
+  },
+  suggestionAddBtn: {
+    backgroundColor: Colors.goldenYellow,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.pill,
+  },
+  suggestionAddBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.charcoal,
+  },
+
+  // ACTIVE CART
   card: {
     backgroundColor: Colors.cardWhite,
     borderRadius: 16,
@@ -462,6 +725,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: Colors.borderLight,
+    ...Shadows.card,
   },
   cardTitle: {
     fontSize: 15,
@@ -476,24 +740,37 @@ const styles = StyleSheet.create({
   },
   segmentBtn: {
     flex: 1,
-    paddingVertical: 11,
-    borderRadius: 20,
+    paddingVertical: 9,
+    paddingHorizontal: 8,
+    borderRadius: Radius.pill,
     backgroundColor: Colors.warmCream,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: Colors.borderLight,
   },
   segmentBtnActive: {
     backgroundColor: Colors.primaryRed,
     borderColor: Colors.primaryRed,
+    ...Shadows.card,
   },
   segmentText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: Colors.charcoal,
   },
   segmentTextActive: {
     color: '#ffffff',
+    fontWeight: '800',
+  },
+  segmentBadge: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  segmentBadgeActive: {
+    color: '#FFE2DE',
     fontWeight: '800',
   },
   deliveryDetailsSection: {
@@ -534,14 +811,30 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.primaryRed,
   },
+  savedAddressesTriggerBtn: {
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D4C9BF',
+    alignSelf: 'flex-start',
+  },
+  savedAddressesTriggerText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.chocolateBrown,
+  },
   textInput: {
-    backgroundColor: Colors.warmCream,
+    backgroundColor: '#FFFFFF',
     borderRadius: 10,
-    padding: 10,
-    color: Colors.charcoal,
+    padding: 11,
+    minHeight: 44,
+    color: '#1F1F1F',
     fontSize: 13,
     borderWidth: 1,
-    borderColor: Colors.borderLight,
+    borderColor: '#D4C9BF',
   },
   pickupNotice: {
     backgroundColor: Colors.surfaceCream,
@@ -574,21 +867,21 @@ const styles = StyleSheet.create({
   },
   cartItemRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
+    alignItems: 'flex-start',
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderLight,
   },
   itemThumbContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 8,
+    width: 56,
+    height: 56,
+    borderRadius: 10,
     overflow: 'hidden',
     backgroundColor: Colors.surfaceCream,
-    marginRight: 10,
+    marginRight: 12,
     borderWidth: 1,
     borderColor: Colors.borderLight,
+    flexShrink: 0,
   },
   itemThumb: {
     width: '100%',
@@ -596,18 +889,27 @@ const styles = StyleSheet.create({
   },
   itemMainInfo: {
     flex: 1,
-    marginRight: 12,
+    minWidth: 0,
   },
-  itemNameRow: {
+  itemHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    minHeight: 28,
+  },
+  itemNameBlock: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    flexWrap: 'wrap',
+    gap: 6,
+    marginRight: 8,
   },
   itemTitle: {
     fontSize: 14,
     fontWeight: '800',
     color: Colors.charcoal,
-    marginRight: 8,
+    flexShrink: 1,
   },
   sizePill: {
     backgroundColor: '#FFF1EF',
@@ -616,28 +918,78 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
     borderColor: 'rgba(201, 35, 43, 0.2)',
+    flexShrink: 0,
   },
   sizePillText: {
     fontSize: 10,
     fontWeight: '800',
     color: Colors.primaryRed,
   },
+  itemPriceColumn: {
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+    flexShrink: 0,
+    paddingLeft: 4,
+  },
+  itemPriceTotal: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: Colors.primaryRed,
+    textAlign: 'right',
+  },
+  itemPriceUnit: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    marginTop: 1,
+    textAlign: 'right',
+  },
+  itemErrorBadge: {
+    backgroundColor: Colors.softTomato,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginTop: 4,
+  },
+  itemErrorText: {
+    fontSize: 11,
+    color: Colors.primaryRed,
+    fontWeight: '700',
+  },
+  halfAndHalfTagContainer: {
+    backgroundColor: '#FFF8EC',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 179, 35, 0.3)',
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  halfAndHalfTagText: {
+    fontSize: 11,
+    color: Colors.charcoal,
+    fontWeight: '700',
+  },
   customizationTag: {
     fontSize: 11,
     color: Colors.textSecondary,
-    marginTop: 2,
+    marginTop: 3,
+    lineHeight: 15,
   },
   instructionsText: {
     fontSize: 11,
     fontStyle: 'italic',
     color: Colors.textMuted,
     marginTop: 3,
+    lineHeight: 15,
   },
   itemActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     marginTop: 10,
-    gap: 8,
+    rowGap: 8,
   },
   stepper: {
     flexDirection: 'row',
@@ -646,31 +998,41 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     borderColor: Colors.borderLight,
+    height: 32,
   },
   stepperBtn: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepperBtnText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
     color: Colors.charcoal,
+    lineHeight: 18,
   },
   stepperQty: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     fontSize: 13,
     fontWeight: '800',
     color: Colors.charcoal,
   },
+  itemActionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   editBtn: {
     backgroundColor: Colors.warmCream,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: Colors.borderLight,
+    minHeight: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   editBtnText: {
     fontSize: 11,
@@ -680,32 +1042,22 @@ const styles = StyleSheet.create({
   deleteBtn: {
     backgroundColor: Colors.softTomato,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 6,
+    minHeight: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   deleteBtnText: {
     fontSize: 11,
     fontWeight: '700',
     color: Colors.primaryRed,
   },
-  itemPriceColumn: {
-    alignItems: 'flex-end',
-    justifyContent: 'flex-start',
-  },
-  itemPriceTotal: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: Colors.primaryRed,
-  },
-  itemPriceUnit: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 6,
+    alignItems: 'center',
+    marginBottom: 8,
   },
   summaryLabel: {
     fontSize: 13,
@@ -719,151 +1071,87 @@ const styles = StyleSheet.create({
   summaryRowTotal: {
     borderTopWidth: 1,
     borderTopColor: Colors.borderLight,
-    marginTop: 6,
     paddingTop: 10,
+    marginTop: 6,
   },
   summaryTotalLabel: {
     fontSize: 15,
-    fontWeight: '900',
+    fontWeight: '800',
     color: Colors.charcoal,
   },
   summaryTotalValue: {
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '900',
     color: Colors.primaryRed,
   },
   provisionalDisclaimer: {
     backgroundColor: Colors.surfaceCream,
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    marginTop: 14,
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 10,
   },
   disclaimerTitle: {
     fontSize: 11,
     fontWeight: '800',
     color: Colors.charcoal,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   disclaimerText: {
     fontSize: 11,
     color: Colors.textSecondary,
-    lineHeight: 16,
+    lineHeight: 15,
   },
-  phase2Notice: {
-    backgroundColor: 'rgba(40, 122, 75, 0.08)',
+  readyCard: {
+    backgroundColor: '#F0FFF4',
     padding: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(40, 122, 75, 0.2)',
-    marginTop: 12,
-  },
-  phase2NoticeText: {
-    fontSize: 11,
-    color: Colors.freshGreen,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  priceChangeBanner: {
-    backgroundColor: '#FFF8E6',
-    borderWidth: 1,
-    borderColor: Colors.goldenYellow,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
-  },
-  priceChangeInfo: {
-    marginBottom: 10,
-  },
-  priceChangeTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#996500',
-    marginBottom: 4,
-  },
-  priceChangeText: {
-    fontSize: 12,
-    color: Colors.charcoal,
-    lineHeight: 18,
-  },
-  acceptPriceBtn: {
-    backgroundColor: Colors.goldenYellow,
-    paddingVertical: 9,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-  },
-  acceptPriceBtnText: {
-    color: Colors.charcoal,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  itemErrorBadge: {
-    backgroundColor: Colors.softTomato,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginTop: 4,
-    alignSelf: 'flex-start',
-  },
-  itemErrorText: {
-    fontSize: 11,
-    color: Colors.primaryRed,
-    fontWeight: '800',
-  },
-  readyCard: {
-    backgroundColor: 'rgba(40, 122, 75, 0.08)',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(40, 122, 75, 0.3)',
-    padding: 12,
-    marginTop: 12,
+    borderColor: '#C6F6D5',
+    marginTop: 10,
   },
   readyTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
-    color: Colors.freshGreen,
-    marginBottom: 4,
+    color: '#22543D',
+    marginBottom: 2,
   },
   readyText: {
-    fontSize: 12,
-    color: Colors.charcoal,
+    fontSize: 11,
+    color: '#276749',
   },
   blockerCard: {
     backgroundColor: Colors.softTomato,
-    borderRadius: 10,
+    padding: 10,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(201, 35, 43, 0.3)',
-    padding: 12,
-    marginTop: 12,
+    borderColor: 'rgba(201, 35, 43, 0.25)',
+    marginTop: 10,
   },
   blockerTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     color: Colors.primaryRed,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   blockersList: {
-    gap: 4,
+    gap: 2,
   },
   blockerItem: {
     fontSize: 11,
     color: Colors.primaryRed,
-    lineHeight: 16,
+    fontWeight: '600',
   },
   checkoutBtn: {
     backgroundColor: Colors.primaryRed,
-    paddingVertical: 16,
-    borderRadius: 28,
+    paddingVertical: 14,
+    borderRadius: Radius.pill,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 16,
+    marginTop: 14,
+    ...Shadows.card,
   },
   checkoutBtnText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '900',
+    fontSize: 14,
+    fontWeight: '800',
   },
 });

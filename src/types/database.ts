@@ -309,6 +309,7 @@ export interface Database {
           accepted_at?: string | null;
           prepared_at?: string | null;
           ready_at?: string | null;
+          in_transit_at?: string | null;
           completed_at?: string | null;
           staff_notes?: string | null;
           assigned_staff_id?: string | null;
@@ -342,6 +343,7 @@ export interface Database {
           accepted_at?: string | null;
           prepared_at?: string | null;
           ready_at?: string | null;
+          in_transit_at?: string | null;
           completed_at?: string | null;
           staff_notes?: string | null;
           assigned_staff_id?: string | null;
@@ -359,6 +361,7 @@ export interface Database {
           accepted_at?: string | null;
           prepared_at?: string | null;
           ready_at?: string | null;
+          in_transit_at?: string | null;
           completed_at?: string | null;
           staff_notes?: string | null;
           assigned_staff_id?: string | null;

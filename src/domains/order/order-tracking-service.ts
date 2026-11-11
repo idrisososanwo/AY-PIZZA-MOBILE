@@ -15,10 +15,12 @@
  * 5. Reconnection & Polling Fallback: Periodic polling (10s) ensures delivery even during network drop.
  * 6. Terminal State Shutdown: Polling and WebSocket subscriptions are cleanly stopped upon reaching
  *    terminal status (DELIVERED or CANCELLED).
+ * 7. Decoupled Loading State: Realtime channel state transitions do not overwrite initial authoritative
+ *    order loading states, preventing race-condition screen stalls.
  */
 
 import { supabase } from '../../config/supabase';
-import { Order, OrderStatus } from '../../types/order';
+import { Order } from '../../types/order';
 import { orderService } from './order-service';
 
 export interface TrackingState {
@@ -38,11 +40,13 @@ export class OrderTrackingService {
    */
   startTracking(
     orderId: string,
-    receiptToken: string,
-    onUpdate: TrackingUpdateCallback
+    receiptToken?: string,
+    onUpdate?: TrackingUpdateCallback
   ): () => void {
+    const callback = onUpdate || (() => {});
+
     if (!orderId) {
-      onUpdate({
+      callback({
         order: null,
         isLoading: false,
         isRealtimeConnected: false,
@@ -53,25 +57,32 @@ export class OrderTrackingService {
     }
 
     let isDisposed = false;
+    let isInitialLoading = true;
     let currentOrder: Order | null = null;
     let isRealtimeConnected = false;
+    let lastError: string | null = null;
     let pollIntervalId: any = null;
     let realtimeChannel: any = null;
+    let initialFetchTimeout: any = null;
 
     // Helper to safely broadcast state updates
-    const emitState = (isLoading: boolean = false, error: string | null = null) => {
+    const emitState = () => {
       if (isDisposed) return;
       const isTerminal = currentOrder?.status === 'DELIVERED' || currentOrder?.status === 'CANCELLED';
-      onUpdate({
+      callback({
         order: currentOrder,
-        isLoading,
+        isLoading: isInitialLoading,
         isRealtimeConnected,
         trackingMode: isTerminal ? 'terminal' : isRealtimeConnected ? 'realtime' : 'polling',
-        error,
+        error: lastError,
       });
     };
 
     const cleanupResources = () => {
+      if (initialFetchTimeout) {
+        clearTimeout(initialFetchTimeout);
+        initialFetchTimeout = null;
+      }
       if (pollIntervalId) {
         clearInterval(pollIntervalId);
         pollIntervalId = null;
@@ -90,12 +101,23 @@ export class OrderTrackingService {
     // Authoritative fetch function
     const fetchAuthoritativeOrder = async (isInitial: boolean = false) => {
       try {
-        if (isInitial) emitState(true, null);
+        if (isInitial) {
+          isInitialLoading = true;
+          lastError = null;
+          emitState();
+        }
 
         const result = await orderService.getOrderReceipt(orderId, receiptToken);
         if (isDisposed) return;
 
         if (result.success && result.order) {
+          if (initialFetchTimeout) {
+            clearTimeout(initialFetchTimeout);
+            initialFetchTimeout = null;
+          }
+          isInitialLoading = false;
+          lastError = null;
+
           const incomingOrder = result.order;
           const incomingVersion = incomingOrder.version ?? 1;
           const existingVersion = currentOrder?.version ?? 0;
@@ -103,12 +125,12 @@ export class OrderTrackingService {
           // Monotonic check: Ensure state never regresses
           if (!currentOrder || incomingVersion >= existingVersion) {
             currentOrder = incomingOrder;
-            emitState(false, null);
+            emitState();
 
             // If terminal state reached, stop polling and close subscription immediately
             if (incomingOrder.status === 'DELIVERED' || incomingOrder.status === 'CANCELLED') {
               cleanupResources();
-              emitState(false, null);
+              emitState();
               return;
             }
           }
@@ -125,25 +147,52 @@ export class OrderTrackingService {
             );
 
             if (!isAuthenticatedOwner && realtimeChannel) {
-              try {
-                supabase.removeChannel(realtimeChannel);
-              } catch {}
-              realtimeChannel = null;
+              const ch = realtimeChannel;
+              realtimeChannel = null; // Prevent re-entrant CLOSED loop
               isRealtimeConnected = false;
-              emitState(false, null);
+              try {
+                supabase.removeChannel(ch);
+              } catch {}
+              emitState();
             }
           } catch {
             // Ignore session check error
           }
-        } else if (isInitial) {
-          emitState(false, result.error || 'Unable to retrieve order details.');
+        } else {
+          if (isInitial || !currentOrder) {
+            if (initialFetchTimeout) {
+              clearTimeout(initialFetchTimeout);
+              initialFetchTimeout = null;
+            }
+            isInitialLoading = false;
+            lastError = result.error || 'Unable to retrieve order details.';
+            emitState();
+          }
         }
       } catch (err: any) {
-        if (!isDisposed && isInitial) {
-          emitState(false, err.message || 'Network error fetching order.');
+        if (!isDisposed && (isInitial || !currentOrder)) {
+          if (initialFetchTimeout) {
+            clearTimeout(initialFetchTimeout);
+            initialFetchTimeout = null;
+          }
+          isInitialLoading = false;
+          lastError = err.message || 'Network error fetching order.';
+          emitState();
         }
       }
     };
+
+    // Initial broadcast: immediately notify listener that loading is underway
+    emitState();
+
+    // Guard: 10s initial fetch timeout so the user is never left hanging
+    initialFetchTimeout = setTimeout(() => {
+      if (!isDisposed && !currentOrder && isInitialLoading) {
+        isInitialLoading = false;
+        lastError = 'Connection to AY Pizza timed out. Please check your network and tap Retry.';
+        emitState();
+      }
+    }, 10000);
 
     // 1. Initial Authoritative Load
     fetchAuthoritativeOrder(true);
@@ -177,16 +226,18 @@ export class OrderTrackingService {
         }
       )
       .subscribe((status: string) => {
-        if (isDisposed) return;
+        if (isDisposed || !realtimeChannel) return;
 
         if (status === 'SUBSCRIBED') {
           isRealtimeConnected = true;
-          emitState(false, null);
+          emitState();
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
           isRealtimeConnected = false;
-          emitState(false, null);
-          // On disconnect, perform an authoritative re-fetch
-          fetchAuthoritativeOrder(false);
+          emitState();
+          // If channel closed unexpectedly while tracking an active order, re-fetch
+          if (realtimeChannel) {
+            fetchAuthoritativeOrder(false);
+          }
         }
       });
 

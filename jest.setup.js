@@ -70,6 +70,15 @@ jest.mock('react-native', () => ({
   AccessibilityInfo: {
     isReduceMotionEnabled: jest.fn(async () => false),
   },
+  Dimensions: {
+    get: jest.fn(() => ({ width: 390, height: 844, scale: 2, fontScale: 1 })),
+    addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+  },
+  BackHandler: {
+    addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+    removeEventListener: jest.fn(),
+    exitApp: jest.fn(),
+  },
   useWindowDimensions: () => ({ width: 390, height: 844 }),
   Animated: {
     Value: jest.fn((val) => ({
@@ -115,9 +124,59 @@ jest.mock('react-native', () => ({
   Alert: {
     alert: jest.fn(),
   },
+  Linking: {
+    openURL: jest.fn(async () => true),
+    canOpenURL: jest.fn(async () => true),
+    openSettings: jest.fn(async () => true),
+  },
+  Keyboard: {
+    dismiss: jest.fn(),
+  },
 }));
 
-// Mock for react-native-svg
+// Mock for expo-location
+jest.mock('expo-location', () => ({
+  requestForegroundPermissionsAsync: jest.fn(async () => ({ status: 'granted', granted: true })),
+  getForegroundPermissionsAsync: jest.fn(async () => ({ status: 'granted', granted: true })),
+  getCurrentPositionAsync: jest.fn(async () => ({
+    coords: {
+      latitude: 6.5186,
+      longitude: 3.3983,
+      altitude: 0,
+      accuracy: 10,
+      altitudeAccuracy: 10,
+      heading: 0,
+      speed: 0,
+    },
+    timestamp: Date.now(),
+  })),
+  reverseGeocodeAsync: jest.fn(async ({ latitude, longitude }) => [
+    {
+      city: 'Lagos',
+      district: 'Akoka',
+      street: 'University Road',
+      region: 'Lagos State',
+      subregion: 'Yaba',
+      country: 'Nigeria',
+      postalCode: '100001',
+      name: 'UNILAG Campus',
+    },
+  ]),
+  Accuracy: {
+    Lowest: 1,
+    Low: 2,
+    Balanced: 3,
+    High: 4,
+    Highest: 5,
+    BestForNavigation: 6,
+  },
+  PermissionStatus: {
+    GRANTED: 'granted',
+    DENIED: 'denied',
+    UNDETERMINED: 'undetermined',
+  },
+}));
+
 jest.mock('react-native-svg', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const React = require('react');

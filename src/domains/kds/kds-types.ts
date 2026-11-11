@@ -40,8 +40,9 @@ export interface KdsOrder {
   rejectionReason?: string | null;
   staffNotes?: string | null;
   assignedStaffId?: string | null;
+  assignedRiderId?: string | null;
   version: number;
-  refundStatus: 'NOT_APPLICABLE' | 'REFUND_REQUIRED' | 'REFUND_PENDING' | 'REFUNDED';
+  refundStatus: 'NOT_APPLICABLE' | 'REFUND_REQUIRED' | 'REFUND_PENDING' | 'REFUNDED' | 'REFUND_FAILED';
   createdAt: string;
   updatedAt: string;
   acceptedAt?: string | null;

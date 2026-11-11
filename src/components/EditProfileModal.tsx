@@ -78,7 +78,12 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
               <Text style={styles.title}>Edit Profile 👤</Text>
               <Text style={styles.subtitle}>Update your contact information</Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.8}>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeBtn}
+              activeOpacity={0.8}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <Text style={styles.closeBtnText}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -95,6 +100,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
               style={styles.input}
               placeholder="e.g. Adebayo Idris"
               placeholderTextColor={Colors.textMuted}
+              selectionColor={Colors.primaryRed}
               value={fullName}
               onChangeText={setFullName}
               autoCapitalize="words"
@@ -105,6 +111,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
               style={styles.input}
               placeholder="e.g. 0812 345 6789"
               placeholderTextColor={Colors.textMuted}
+              selectionColor={Colors.primaryRed}
               value={phone}
               onChangeText={setPhone}
               keyboardType="phone-pad"
@@ -210,6 +217,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 11,
+    minHeight: 48,
     fontSize: 14,
     color: Colors.charcoal,
     borderWidth: 1,

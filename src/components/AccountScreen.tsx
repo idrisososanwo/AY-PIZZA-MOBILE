@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Colors } from '../constants/colors';
-import { Brand } from '../constants/brand';
 import { CustomerProfile } from '../domains/customer/customer-types';
 import { isStaffRole, signOutUser } from '../domains/auth/auth-service';
 import { notificationService, NotificationPermissionState } from '../domains/notifications/notification-service';
@@ -26,6 +25,7 @@ interface AccountScreenProps {
   onRefreshProfile: () => void;
   onOpenKitchenDisplay: () => void;
   onNavigateToOrders: () => void;
+  onNavigateToHome?: () => void;
 }
 
 export const AccountScreen: React.FC<AccountScreenProps> = ({
@@ -33,6 +33,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   onRefreshProfile,
   onOpenKitchenDisplay,
   onNavigateToOrders,
+  onNavigateToHome,
 }) => {
   // Modal states
   const [authModalVisible, setAuthModalVisible] = useState(false);
@@ -50,7 +51,10 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
 
   useEffect(() => {
     notificationService.checkPermissionStatus().then(setNotifState);
-  }, []);
+    if (!customer) {
+      onRefreshProfile();
+    }
+  }, [customer, onRefreshProfile]);
 
   const handleToggleNotifications = async () => {
     if (notifState === 'granted') {
@@ -67,6 +71,18 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       setNotifState(res.status);
       if (res.success) {
         Alert.alert('Notifications Enabled', 'You will now receive instant alerts for baking and delivery milestones! 🍕');
+      } else if (res.canAskAgain === false) {
+        Alert.alert(
+          'Permission Required',
+          res.error || 'Please enable notifications in your device settings to receive order alerts.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: () => notificationService.openDeviceSettings(),
+            },
+          ]
+        );
       } else if (res.error) {
         Alert.alert('Notice', res.error);
       }
@@ -85,6 +101,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
           text: 'Sign Out',
           style: 'destructive',
           onPress: async () => {
+            await notificationService.deactivateCurrentToken('User Logged Out');
             await signOutUser();
             onRefreshProfile();
           },
@@ -166,11 +183,11 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* 3. ACCOUNT MANAGEMENT SECTION (SIGNED-IN CUSTOMERS) */}
-      {customer && (
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Account & Delivery</Text>
+      {/* 3. ACCOUNT MANAGEMENT & DELIVERY SECTION (AVAILABLE TO ALL USERS) */}
+      <View style={styles.sectionContainer}>
+        <Text style={styles.sectionTitle}>Account & Delivery</Text>
 
+        {customer && (
           <TouchableOpacity
             style={styles.menuRow}
             onPress={() => setEditProfileVisible(true)}
@@ -182,20 +199,23 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
             </View>
             <Text style={styles.menuArrow}>›</Text>
           </TouchableOpacity>
+        )}
 
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => setAddressesVisible(true)}
-            activeOpacity={0.75}
-          >
-            <View style={styles.menuRowLeft}>
-              <Text style={styles.menuIcon}>📍</Text>
+        <TouchableOpacity
+          style={styles.menuRow}
+          onPress={() => setAddressesVisible(true)}
+          activeOpacity={0.75}
+        >
+          <View style={styles.menuRowLeft}>
+            <Text style={styles.menuIcon}>📍</Text>
+            <View>
               <Text style={styles.menuLabel}>Saved Delivery Addresses</Text>
+              <Text style={styles.menuSubLabel}>Manage your hostel, room & delivery locations</Text>
             </View>
-            <Text style={styles.menuArrow}>›</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+          </View>
+          <Text style={styles.menuArrow}>›</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* 4. PREFERENCES */}
       <View style={styles.sectionContainer}>
@@ -241,7 +261,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
             <Text style={styles.menuIcon}>💬</Text>
             <View>
               <Text style={styles.menuLabel}>Help & Customer Support</Text>
-              <Text style={styles.menuSubLabel}>Phone: {Brand.contact.phone} • WhatsApp</Text>
+              <Text style={styles.menuSubLabel}>FAQs • Counter Location • Escalations</Text>
             </View>
           </View>
           <Text style={styles.menuArrow}>›</Text>
@@ -329,7 +349,10 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
         visible={authModalVisible}
         initialMode={authModalMode}
         onClose={() => setAuthModalVisible(false)}
-        onSuccess={() => onRefreshProfile()}
+        onSuccess={async () => {
+          await onRefreshProfile();
+        }}
+        onNavigateHome={onNavigateToHome}
       />
 
       {customer && (
@@ -341,13 +364,11 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
         />
       )}
 
-      {customer && (
-        <SavedAddressesModal
-          visible={addressesVisible}
-          userId={customer.id}
-          onClose={() => setAddressesVisible(false)}
-        />
-      )}
+      <SavedAddressesModal
+        visible={addressesVisible}
+        userId={customer?.id}
+        onClose={() => setAddressesVisible(false)}
+      />
 
       <SupportModal
         visible={supportVisible}

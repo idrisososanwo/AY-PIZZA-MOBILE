@@ -1,7 +1,7 @@
 import React from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from 'react-native';
 import { Colors } from '../constants/colors';
-import { ProductCategory } from '../types/catalog';
+import { ProductCategory, normalizeCategorySlug } from '../types/catalog';
 import { Radius, Shadows } from '../constants/theme';
 
 interface CategoryBarProps {
@@ -15,8 +15,24 @@ const CATEGORY_ICONS: Record<string, string> = {
   pizza: '🍕',
   icecream: '🍦',
   fastfood: '🍔',
+  sides: '🍟',
   drinks: '🥤',
+  beverages: '🥤',
 };
+
+function getCategoryIcon(slug: string, name?: string): string {
+  const norm = normalizeCategorySlug(slug);
+  if (CATEGORY_ICONS[norm]) return CATEGORY_ICONS[norm];
+  if (CATEGORY_ICONS[slug]) return CATEGORY_ICONS[slug];
+  if (name) {
+    const n = name.toLowerCase();
+    if (n.includes('pizza')) return '🍕';
+    if (n.includes('ice') || n.includes('shake')) return '🍦';
+    if (n.includes('side') || n.includes('burger') || n.includes('fast') || n.includes('wing')) return '🍔';
+    if (n.includes('drink') || n.includes('beverage') || n.includes('water')) return '🥤';
+  }
+  return '🍽️';
+}
 
 export const CategoryBar: React.FC<CategoryBarProps> = ({
   categories,
@@ -25,6 +41,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
 }) => {
   const allPill = { id: 'all', name: 'All Menu', slug: 'all' as any, displayOrder: 0, isActive: true, createdAt: '' };
   const displayList = [allPill, ...categories];
+  const activeNormalized = normalizeCategorySlug(selectedCategorySlug);
 
   return (
     <View style={styles.container}>
@@ -32,10 +49,11 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
         {displayList.map((cat) => {
-          const isSelected = selectedCategorySlug === cat.slug;
-          const icon = CATEGORY_ICONS[cat.slug] || '🍽️';
+          const isSelected = activeNormalized === normalizeCategorySlug(cat.slug);
+          const icon = getCategoryIcon(cat.slug, cat.name);
 
           return (
             <TouchableOpacity
@@ -46,6 +64,8 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
               ]}
               onPress={() => onSelectCategory(cat.slug)}
               activeOpacity={0.8}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+              testID={`category-pill-${cat.slug}`}
             >
               <Text style={styles.icon}>{icon}</Text>
               <Text style={[styles.pillText, isSelected ? styles.pillTextActive : styles.pillTextInactive]}>
@@ -61,7 +81,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 12,
+    paddingVertical: 10,
     backgroundColor: Colors.warmCream,
     borderBottomWidth: 1,
     borderBottomColor: Colors.borderLight,
@@ -69,12 +89,14 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     gap: 8,
+    alignItems: 'center',
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 9,
+    paddingVertical: 10,
+    minHeight: 40,
     borderRadius: Radius.pill,
     ...Shadows.card,
   },

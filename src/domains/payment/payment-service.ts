@@ -3,8 +3,15 @@
  * Orchestrates payment provider interactions, currency formatting, and state safety.
  */
 
-import { PaymentProvider, PaymentInitializationParams, PaymentInitializationResult, PaymentVerificationResult } from './payment-types';
+import {
+  PaymentProvider,
+  PaymentInitializationParams,
+  PaymentInitializationResult,
+  PaymentVerificationResult,
+  StagingSimulationParams,
+} from './payment-types';
 import { paystackProvider } from './paystack-provider';
+import { Config } from '../../config/env';
 
 export class PaymentService {
   private provider: PaymentProvider;
@@ -33,6 +40,20 @@ export class PaymentService {
    */
   async verifyPayment(reference: string, orderId?: string, receiptToken?: string): Promise<PaymentVerificationResult> {
     return this.provider.verifyPayment(reference, orderId, receiptToken);
+  }
+
+  /**
+   * Secure Staging-Only Payment Simulation (QA / Internal Testing)
+   * Strictly disallowed in production mode.
+   */
+  async simulateStagingPayment(params: StagingSimulationParams): Promise<PaymentVerificationResult> {
+    if (Config.isProduction) {
+      throw new Error('Payment simulation is strictly forbidden in production mode.');
+    }
+    if (this.provider.simulateStagingPayment) {
+      return this.provider.simulateStagingPayment(params);
+    }
+    throw new Error('Payment simulation is not supported by the configured payment provider.');
   }
 
   /**

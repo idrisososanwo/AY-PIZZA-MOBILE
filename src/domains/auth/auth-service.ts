@@ -53,6 +53,14 @@ export function isStaffRole(role: UserRole | undefined | null): boolean {
   return Boolean(role && ['staff', 'admin', 'kitchen', 'counter', 'manager'].includes(role));
 }
 
+export function isRiderRole(role: UserRole | undefined | null): boolean {
+  return role === 'rider';
+}
+
+export function canUpdateDeliveryStatus(role: UserRole | undefined | null): boolean {
+  return hasPermission(role, 'UPDATE_DELIVERY_STATUS');
+}
+
 export function canModifyInventory(role: UserRole | undefined | null): boolean {
   return hasPermission(role, 'TOGGLE_INVENTORY_AVAILABILITY');
 }
@@ -67,26 +75,37 @@ export function canModifyPrices(role: UserRole | undefined | null): boolean {
 
 /**
  * Fetches the authoritative database role for the current authenticated user.
- * Returns null if not logged in or if the profile cannot be found.
+ * Returns null if not logged in.
  */
 export async function fetchAuthenticatedRole(): Promise<UserRole | null> {
   try {
+    let authUser: any = null;
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData?.user) {
+    if (!authError && authData?.user) {
+      authUser = authData.user;
+    } else {
+      const { data: sessData } = await supabase.auth.getSession();
+      if (sessData?.session?.user) {
+        authUser = sessData.session.user;
+      }
+    }
+
+    if (!authUser) {
       return null;
     }
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
-      .eq('id', authData.user.id)
+      .eq('id', authUser.id)
       .single();
 
-    if (profileError || !profile) {
-      return null;
+    if (!profileError && profile) {
+      return (profile as any).role as UserRole;
     }
 
-    return (profile as any).role as UserRole;
+    // Default to 'customer' for authenticated user if profile lookup fails
+    return 'customer';
   } catch {
     return null;
   }
@@ -94,52 +113,114 @@ export async function fetchAuthenticatedRole(): Promise<UserRole | null> {
 
 /**
  * Fetches the currently authenticated customer profile from the database.
+ * If user is authenticated in Supabase, guarantees returning a non-null CustomerProfile.
  */
 export async function fetchCurrentCustomerProfile(): Promise<CustomerProfile | null> {
   try {
+    let authUser: any = null;
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    if (authError || !authData?.user) {
+    if (!authError && authData?.user) {
+      authUser = authData.user;
+    } else {
+      // Fallback to local session
+      const { data: sessData } = await supabase.auth.getSession();
+      if (sessData?.session?.user) {
+        authUser = sessData.session.user;
+      }
+    }
+
+    if (!authUser) {
       return null;
     }
 
+    // Attempt to read from public.profiles
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', authData.user.id)
+      .eq('id', authUser.id)
       .single();
 
     const rawProfile = profile as any;
-    if (profileError || !rawProfile) {
-      return null;
+    if (rawProfile && !profileError) {
+      return {
+        id: rawProfile.id,
+        fullName: rawProfile.full_name || authUser.user_metadata?.full_name || 'Valued Customer',
+        phone: rawProfile.phone || authUser.user_metadata?.phone || null,
+        email: rawProfile.email || authUser.email || null,
+        role: (rawProfile.role as UserRole) || 'customer',
+        avatarUrl: rawProfile.avatar_url,
+        isPhoneVerified: Boolean(rawProfile.is_phone_verified),
+        createdAt: rawProfile.created_at || authUser.created_at,
+        updatedAt: rawProfile.updated_at || authUser.updated_at,
+      };
     }
 
+    // Heal: Ensure public.profiles record exists if trigger was delayed or missing.
+    // Omit server-managed fields (role, is_phone_verified) to prevent role-escalation, demotion,
+    // or overwriting trusted database state. PostgreSQL defaults role to 'customer' on insert.
+    try {
+      await (supabase.from('profiles') as any).upsert(
+        {
+          id: authUser.id,
+          email: authUser.email,
+          full_name: authUser.user_metadata?.full_name || 'Valued Customer',
+          phone: authUser.user_metadata?.phone || null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      );
+    } catch {
+      // Non-blocking
+    }
+
+    // Self-healing fallback: Never treat authenticated user as guest
     return {
-      id: rawProfile.id,
-      fullName: rawProfile.full_name,
-      phone: rawProfile.phone,
-      email: rawProfile.email || authData.user.email || null,
-      role: rawProfile.role as UserRole,
-      avatarUrl: rawProfile.avatar_url,
-      isPhoneVerified: Boolean(rawProfile.is_phone_verified),
-      createdAt: rawProfile.created_at,
-      updatedAt: rawProfile.updated_at,
+      id: authUser.id,
+      fullName: authUser.user_metadata?.full_name || 'Valued Customer',
+      phone: authUser.user_metadata?.phone || null,
+      email: authUser.email || null,
+      role: 'customer',
+      avatarUrl: authUser.user_metadata?.avatar_url || null,
+      isPhoneVerified: Boolean(authUser.phone_confirmed_at),
+      createdAt: authUser.created_at || new Date().toISOString(),
+      updatedAt: authUser.updated_at || new Date().toISOString(),
     };
   } catch {
     return null;
   }
 }
 
+export interface SignUpResult {
+  success: boolean;
+  user?: any;
+  session?: any;
+  emailConfirmationRequired?: boolean;
+  alreadyRegistered?: boolean;
+  error?: string;
+}
+
+export interface SignInResult {
+  success: boolean;
+  user?: any;
+  session?: any;
+  emailNotConfirmed?: boolean;
+  error?: string;
+}
+
 /**
  * Customer Sign-Up with Email and Password
  * Links new auth user with metadata (fullName, phone) which triggers
  * `handle_new_user()` in PostgreSQL to create `public.profiles`.
+ * 
+ * If Supabase email confirmation is enabled, session will be null and
+ * emailConfirmationRequired will be true.
  */
 export async function signUpCustomer(
   email: string,
   password: string,
   fullName: string,
   phone: string
-): Promise<{ success: boolean; user?: any; error?: string }> {
+): Promise<SignUpResult> {
   try {
     const cleanEmail = email.trim().toLowerCase();
     const cleanName = fullName.trim();
@@ -170,12 +251,99 @@ export async function signUpCustomer(
     });
 
     if (error) {
+      const msg = error.message.toLowerCase();
+      const isAlready = msg.includes('already registered') || msg.includes('already in use') || msg.includes('user already exists');
+      return {
+        success: false,
+        alreadyRegistered: isAlready,
+        error: error.message,
+      };
+    }
+
+    // In Supabase, if email is already registered and email confirmation is on,
+    // signUp returns a user with empty identities array to prevent user enumeration
+    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      return {
+        success: false,
+        alreadyRegistered: true,
+        error: 'An account with this email address already exists. Please sign in instead.',
+      };
+    }
+
+    // Ensure database profile is immediately created/updated without dictating server-managed role
+    if (data.user) {
+      try {
+        await (supabase.from('profiles') as any).upsert(
+          {
+            id: data.user.id,
+            email: cleanEmail,
+            full_name: cleanName,
+            phone: cleanPhone,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'id' }
+        );
+      } catch {
+        // Non-blocking fallback
+      }
+    }
+
+    let activeSession = data.session;
+    let emailConfirmationRequired = !activeSession;
+
+    // Immediate active session support: if signUp returned user but no session
+    // (e.g. Supabase response nuance or delayed token), attempt signIn immediately
+    // so user gets instantaneous authenticated session without verification delay.
+    if (!activeSession && data.user) {
+      try {
+        const loginRes = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password,
+        });
+        if (loginRes.data?.session) {
+          activeSession = loginRes.data.session;
+          emailConfirmationRequired = false;
+        }
+      } catch {
+        // If password login fails with unconfirmed email, emailConfirmationRequired remains true
+      }
+    }
+
+    return {
+      success: true,
+      user: data.user,
+      session: activeSession,
+      emailConfirmationRequired,
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Registration failed.' };
+  }
+}
+
+/**
+ * Resends the sign-up email confirmation link.
+ */
+export async function resendVerificationEmail(
+  email: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return { success: false, error: 'A valid email address is required.' };
+    }
+
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: cleanEmail,
+    });
+
+    if (error) {
       return { success: false, error: error.message };
     }
 
-    return { success: true, user: data.user };
+    return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message || 'Registration failed.' };
+    return { success: false, error: err.message || 'Could not resend verification email.' };
   }
 }
 
@@ -185,7 +353,7 @@ export async function signUpCustomer(
 export async function signInCustomer(
   email: string,
   password: string
-): Promise<{ success: boolean; user?: any; error?: string }> {
+): Promise<SignInResult> {
   try {
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) {
@@ -201,10 +369,17 @@ export async function signInCustomer(
     });
 
     if (error) {
-      return { success: false, error: error.message };
+      const isUnconfirmed = error.message.toLowerCase().includes('email not confirmed');
+      return {
+        success: false,
+        emailNotConfirmed: isUnconfirmed,
+        error: isUnconfirmed
+          ? 'Email not confirmed. Please check your inbox or request a new verification link below.'
+          : error.message,
+      };
     }
 
-    return { success: true, user: data.user };
+    return { success: true, user: data.user, session: data.session };
   } catch (err: any) {
     return { success: false, error: err.message || 'Login failed.' };
   }

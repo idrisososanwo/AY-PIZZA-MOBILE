@@ -2,7 +2,32 @@
  * Product Catalog, Variant and Customization Domain Types
  */
 
-export type ProductCategorySlug = 'pizza' | 'icecream' | 'fastfood' | 'drinks';
+export type ProductCategorySlug = 'pizza' | 'icecream' | 'fastfood' | 'sides' | 'drinks' | 'beverages';
+
+/**
+ * Normalizes category slugs to canonical identifiers for robust menu filtering.
+ * Maps aliases like 'sides' -> 'fastfood', 'beverages' -> 'drinks', 'ice-cream' -> 'icecream'.
+ */
+export function normalizeCategorySlug(slug: string): string {
+  if (!slug) return 'all';
+  const s = slug.toLowerCase().trim();
+  if (s === 'all' || s === 'all-menu' || s === 'all menu') return 'all';
+  if (s === 'pizza' || s.includes('pizza')) return 'pizza';
+  if (s === 'icecream' || s === 'ice-cream' || s.includes('shake') || s.includes('ice cream') || s.includes('dessert')) return 'icecream';
+  if (s === 'sides' || s === 'fastfood' || s.includes('side') || s.includes('fast') || s.includes('burger') || s.includes('wing')) return 'fastfood';
+  if (s === 'drinks' || s === 'beverages' || s.includes('drink') || s.includes('beverage') || s.includes('water')) return 'drinks';
+  return s;
+}
+
+/**
+ * Checks whether a given product belongs to the requested category slug.
+ */
+export function isProductInCategory(productCategorySlug: string, targetCategorySlug: string): boolean {
+  if (!targetCategorySlug || targetCategorySlug === 'all') return true;
+  const targetNorm = normalizeCategorySlug(targetCategorySlug);
+  const prodNorm = normalizeCategorySlug(productCategorySlug);
+  return targetNorm === prodNorm;
+}
 
 export interface ProductCategory {
   id: string;

@@ -11,8 +11,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DeliveryLandmark, FulfillmentType } from '../../types/delivery';
 import { Product } from '../../types/catalog';
+import { HALF_AND_HALF_OPTION_ID } from '../catalog/catalog-repository';
 import { calculateOrderTotal, calculateHalfAndHalfSurcharge } from '../order/order-calculator';
-import { PROVISIONAL_LANDMARKS } from '../delivery/delivery-service';
+import { PROVISIONAL_LANDMARKS, deliveryPricingEngine } from '../delivery/delivery-service';
 import { CartItem, CartState, PriceChangeNotice } from './cart-types';
 
 export const CART_STORAGE_KEY = '@ay_pizza_local_cart_v1';
@@ -464,13 +465,22 @@ export class CartStore {
       blockers.push('Please accept the updated menu prices before checkout.');
     }
 
-    // Fulfillment checks
+    // Fulfillment checks via authoritative pricing engine
     let effectiveDeliveryFee = 0;
     if (this.state.fulfillmentType === 'delivery') {
       if (!this.state.selectedLandmark || !this.state.selectedLandmark.isActive) {
         blockers.push('Please select a valid delivery landmark.');
       } else {
-        effectiveDeliveryFee = this.state.selectedLandmark.fee;
+        const quote = deliveryPricingEngine.calculateQuote({
+          fulfillmentType: 'delivery',
+          landmarkId: this.state.selectedLandmark.id,
+          landmarkName: this.state.selectedLandmark.name,
+        });
+        if (!quote.isAvailable) {
+          blockers.push(quote.reason || 'Delivery is currently unavailable.');
+        } else {
+          effectiveDeliveryFee = quote.deliveryFee;
+        }
       }
 
       if (this.state.deliveryAddress.trim().length === 0) {

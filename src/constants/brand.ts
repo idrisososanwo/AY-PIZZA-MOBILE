@@ -17,11 +17,17 @@ export const Brand = {
     },
   },
   contact: {
+    isConfirmedByOwner: false,      // Flagged for restaurant owner verification
     phone: '0813 073 1895',
+    isPhoneVerified: false,         // Phone number requires owner confirmation
     internationalPhone: '+2348130731895',
+    whatsappNumber: '2348130731895',
     whatsappUrl: 'https://wa.me/2348130731895',
+    isWhatsAppVerified: false,      // WhatsApp line requires owner confirmation
     email: 'info@aypizza.ng',
+    isEmailVerified: true,
     website: 'https://aypizza.ng',
+    physicalCounter: 'Opposite King Jaja Hall, UNILAG Main Campus, Akoka',
     socials: {
       instagram: 'https://www.instagram.com/aypizza1',
       tiktok: 'https://tiktok.com/@aypizza1',

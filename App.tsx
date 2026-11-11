@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -22,7 +22,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 import { Colors } from './src/constants/colors';
 import { Brand } from './src/constants/brand';
 import { FoodImages } from './src/constants/images';
-import { Product, ProductCategory } from './src/types/catalog';
+import { Product, ProductCategory, isProductInCategory, normalizeCategorySlug } from './src/types/catalog';
 import { catalogRepository } from './src/domains/catalog/catalog-repository';
 import { cartStore, INITIAL_CART_STATE } from './src/domains/cart/cart-store';
 import { CartState, CartItem } from './src/domains/cart/cart-types';
@@ -35,6 +35,9 @@ import { CartView } from './src/components/CartView';
 import { CheckoutModal } from './src/components/CheckoutModal';
 import { PaystackPaymentModal } from './src/components/PaystackPaymentModal';
 import { OrderReceiptModal } from './src/components/OrderReceiptModal';
+import { CancelOrderConfirmationModal } from './src/components/CancelOrderConfirmationModal';
+import { orderService } from './src/domains/order/order-service';
+import { Order, OrderStatus } from './src/types/order';
 import { KitchenDisplaySystem } from './src/components/KitchenDisplaySystem';
 import { OrderTrackingModal } from './src/components/OrderTrackingModal';
 import { BottomTabBar, CustomerTab } from './src/components/BottomTabBar';
@@ -42,17 +45,25 @@ import { HomeScreen } from './src/components/HomeScreen';
 import { AccountScreen } from './src/components/AccountScreen';
 import { OrdersScreen } from './src/components/OrdersScreen';
 import { LandmarkPickerModal } from './src/components/LandmarkPickerModal';
+import { NavigationDrawer } from './src/components/NavigationDrawer';
+import { AuthModal } from './src/components/AuthModal';
+import { SavedAddressesModal } from './src/components/SavedAddressesModal';
+import { SupportModal } from './src/components/SupportModal';
+import { PromotionsModal } from './src/components/PromotionsModal';
 import { BrandedLaunchScreen } from './src/components/BrandedLaunchScreen';
 import { GuestReceiptStore, GuestReceiptRecord } from './src/domains/order/guest-receipt-store';
 import {
   fetchAuthenticatedRole,
   fetchCurrentCustomerProfile,
   isStaffRole,
+  signOutUser,
   subscribeAuthState,
   subscribeCustomerProfile,
 } from './src/domains/auth/auth-service';
 import { UserRole } from './src/types/auth';
 import { DeliveryLandmark } from './src/types/delivery';
+import { deliveryPricingEngine } from './src/domains/delivery/delivery-pricing-engine';
+import { notificationService } from './src/domains/notifications/notification-service';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<CustomerTab>('home');
@@ -71,6 +82,23 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategorySlug, setSelectedCategorySlug] = useState('all');
   const [landmarkPickerVisible, setLandmarkPickerVisible] = useState(false);
+  const [homePromoSlideIndex, setHomePromoSlideIndex] = useState<number>(0);
+  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
+  const [savedAddressesVisible, setSavedAddressesVisible] = useState<boolean>(false);
+  const [supportModalVisible, setSupportModalVisible] = useState<boolean>(false);
+  const [promotionsModalVisible, setPromotionsModalVisible] = useState<boolean>(false);
+  const [authModalVisible, setAuthModalVisible] = useState<boolean>(false);
+  const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup'>('signin');
+  const menuScrollViewRef = useRef<any>(null);
+
+  // Auto-advance homepage promotional carousel every 5 seconds when active on Home tab
+  useEffect(() => {
+    if (activeTab !== 'home' || isCartOpen || !isAppReady) return;
+    const interval = setInterval(() => {
+      setHomePromoSlideIndex((prev) => (prev + 1) % 3);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [activeTab, isCartOpen, isAppReady]);
 
   // Modals state
   const [selectedProductForDetail, setSelectedProductForDetail] = useState<Product | null>(null);
@@ -96,27 +124,54 @@ export default function App() {
     fulfillmentType: 'pickup' | 'delivery';
     landmarkName?: string;
     deliveryAddress?: string;
-    items: CartItem[];
+    items: CartItem[] | any[];
     subtotal: number;
     deliveryFee: number;
+    discountAmount?: number;
     total: number;
+    orderStatus?: OrderStatus;
+    refundStatus?: string;
+    orderDate?: string;
+    acceptedAt?: string | null;
+    preparedAt?: string | null;
+    readyAt?: string | null;
+    inTransitAt?: string | null;
+    completedAt?: string | null;
   } | null>(null);
   const [selectedOrderForTracking, setSelectedOrderForTracking] = useState<{
     orderId: string;
     receiptToken: string;
   } | null>(null);
+  const [cancellingReceiptOrder, setCancellingReceiptOrder] = useState<{
+    orderId: string;
+    orderNumber: string;
+    orderTotal: number;
+    receiptToken: string;
+  } | null>(null);
+  const [isCancellingReceiptOrder, setIsCancellingReceiptOrder] = useState(false);
 
   // Cart subscription state
   const [cartState, setCartState] = useState<CartState>(INITIAL_CART_STATE);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Refresh profile
-  const refreshCustomer = useCallback(async () => {
+  const refreshCustomer = useCallback(async (): Promise<CustomerProfile | null> => {
     const prof = await fetchCurrentCustomerProfile();
     setCustomerProfile(prof);
     const role = await fetchAuthenticatedRole();
     setAuthenticatedRole(role);
+    if (prof) {
+      notificationService.syncTokenOnAuth();
+    }
+    return prof;
   }, []);
+
+  // Ensure customer profile is refreshed whenever navigating to Account tab
+  useEffect(() => {
+    if (activeTab === 'account') {
+      refreshCustomer();
+    }
+  }, [activeTab, refreshCustomer]);
 
   // Load catalog and session on mount
   useEffect(() => {
@@ -136,6 +191,10 @@ export default function App() {
         const [cats, prods] = await Promise.all([
           catalogRepository.getCategories(),
           catalogRepository.getProducts({ includeUnavailable: true }),
+          deliveryPricingEngine.initialize().catch((err) => {
+            console.warn('Failed to sync delivery pricing from DB:', err);
+            return null;
+          }),
         ]);
 
         if (isMounted) {
@@ -203,8 +262,8 @@ export default function App() {
   const filteredProducts = useMemo(() => {
     let result = products;
 
-    if (selectedCategorySlug !== 'all') {
-      result = result.filter((p) => p.categorySlug === selectedCategorySlug);
+    if (normalizeCategorySlug(selectedCategorySlug) !== 'all') {
+      result = result.filter((p) => isProductInCategory(p.categorySlug, selectedCategorySlug));
     }
 
     if (searchQuery.trim().length > 0) {
@@ -216,6 +275,13 @@ export default function App() {
 
     return result;
   }, [products, selectedCategorySlug, searchQuery]);
+
+  // Robust category selection that clears stale search queries and scrolls to top
+  const handleSelectCategory = useCallback((slug: string) => {
+    setSelectedCategorySlug(slug);
+    setSearchQuery('');
+    menuScrollViewRef.current?.scrollTo({ y: 0, animated: false });
+  }, []);
 
   // Pizzas list for Half & Half secondary flavor picker
   const pizzaProducts = useMemo(
@@ -275,32 +341,64 @@ export default function App() {
     orderNumber: string;
     paymentReference: string;
   }) => {
-    if (!paystackParams) return;
+    let activeReceiptToken = paystackParams?.receiptToken || '';
+    if (!activeReceiptToken) {
+      const stored = await GuestReceiptStore.getReceipt(result.orderId);
+      if (stored?.receiptToken) {
+        activeReceiptToken = stored.receiptToken;
+      }
+    }
+    const customerName =
+      paystackParams?.customerName ||
+      customerProfile?.fullName ||
+      'Valued Customer';
+
+    // Persist confirmed guest receipt in hardware-backed SecureStore immediately
+    if (activeReceiptToken) {
+      await GuestReceiptStore.saveReceipt(
+        result.orderId,
+        result.orderNumber,
+        activeReceiptToken
+      );
+    }
+
+    // Authoritative Order Hydration: Retrieve genuine database order
+    let authOrder: Order | null = null;
+    try {
+      const authRes = await orderService.getOrderReceipt(result.orderId, activeReceiptToken);
+      if (authRes.success && authRes.order) {
+        authOrder = authRes.order;
+      }
+    } catch {
+      // Offline fallback
+    }
 
     const receiptSnapshot = {
-      orderId: paystackParams.orderId,
-      orderNumber: result.orderNumber,
-      paymentReference: result.paymentReference,
-      receiptToken: paystackParams.receiptToken,
-      customerName: paystackParams.customerName,
-      fulfillmentType: cartState.fulfillmentType,
-      landmarkName: cartState.selectedLandmark?.name,
-      deliveryAddress: cartState.deliveryAddress,
-      items: [...cartState.items],
-      subtotal: cartState.subtotal,
-      deliveryFee: cartState.deliveryFee,
-      total: cartState.estimatedTotal,
+      orderId: result.orderId,
+      orderNumber: authOrder?.orderNumber || result.orderNumber,
+      paymentReference: authOrder?.paymentReference || result.paymentReference,
+      receiptToken: activeReceiptToken,
+      customerName: authOrder?.guestName || customerName,
+      fulfillmentType: authOrder?.fulfillmentType || cartState.fulfillmentType,
+      landmarkName: authOrder?.landmarkName || cartState.selectedLandmark?.name,
+      deliveryAddress: authOrder?.deliveryAddress || cartState.deliveryAddress,
+      items: authOrder?.items && authOrder.items.length > 0 ? authOrder.items : [...cartState.items],
+      subtotal: authOrder ? authOrder.subtotal : cartState.subtotal,
+      deliveryFee: authOrder ? authOrder.deliveryFee : cartState.deliveryFee,
+      discountAmount: authOrder?.discountAmount ?? 0,
+      total: authOrder ? authOrder.total : cartState.estimatedTotal,
+      orderStatus: authOrder?.status ?? 'CONFIRMED',
+      refundStatus: authOrder?.refundStatus ?? 'NONE',
+      orderDate: authOrder?.createdAt,
+      acceptedAt: authOrder?.acceptedAt,
+      preparedAt: authOrder?.preparedAt,
+      readyAt: authOrder?.readyAt,
+      inTransitAt: authOrder?.inTransitAt,
+      completedAt: authOrder?.completedAt,
     };
 
     setPaystackParams(null);
     setReceiptData(receiptSnapshot);
-
-    // Persist confirmed guest receipt in hardware-backed SecureStore
-    await GuestReceiptStore.saveReceipt(
-      paystackParams.orderId,
-      result.orderNumber,
-      paystackParams.receiptToken
-    );
 
     await cartStore.clearCart();
     setIsCartOpen(false);
@@ -313,6 +411,63 @@ export default function App() {
     setActiveTab('orders');
     GuestReceiptStore.getAllReceipts().then(setGuestOrders);
   };
+
+  // Real-time synchronization for immediate post-checkout receipt
+  useEffect(() => {
+    if (!receiptData?.orderId) return;
+
+    let isMounted = true;
+    const interval = setInterval(async () => {
+      try {
+        const res = await orderService.getOrderReceipt(receiptData.orderId, receiptData.receiptToken);
+        if (isMounted && res.success && res.order) {
+          setReceiptData((prev) => {
+            if (!prev || prev.orderId !== res.order!.id) return prev;
+            if (prev.orderStatus !== res.order!.status || prev.refundStatus !== res.order!.refundStatus) {
+              return {
+                ...prev,
+                orderStatus: res.order!.status,
+                refundStatus: res.order!.refundStatus,
+                acceptedAt: res.order!.acceptedAt,
+                preparedAt: res.order!.preparedAt,
+                readyAt: res.order!.readyAt,
+                inTransitAt: res.order!.inTransitAt,
+                completedAt: res.order!.completedAt,
+              };
+            }
+            return prev;
+          });
+        }
+      } catch {
+        // Ignored during background polling
+      }
+    }, 4000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [receiptData?.orderId, receiptData?.receiptToken]);
+
+  const handleDrawerSignOut = useCallback(() => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out of AY Pizza?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            await notificationService.deactivateCurrentToken('User Logged Out');
+            await signOutUser();
+            await refreshCustomer();
+            showToast('Signed out of AY Pizza 👋');
+          },
+        },
+      ]
+    );
+  }, [refreshCustomer]);
 
   // STAFF ROUTE: Dedicated /kitchen entry point with strict database RBAC gate
   if (isKitchenMode) {
@@ -382,25 +537,41 @@ export default function App() {
                 style={styles.backBtnRow}
                 onPress={() => setIsCartOpen(false)}
                 activeOpacity={0.8}
+                testID="cart-back-btn"
               >
                 <Text style={styles.backArrow}>←</Text>
                 <Text style={styles.backLabel}>Back to Menu</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity
-                style={styles.brandLogoRow}
-                onPress={() => {
-                  setIsCartOpen(false);
-                  setActiveTab('home');
-                }}
-                activeOpacity={0.9}
-              >
-                <Text style={styles.pizzaEmoji}>🍕</Text>
-                <Text style={styles.brandTitle}>{Brand.shortName}</Text>
-                <View style={styles.brandBadgeUnilag}>
-                  <Text style={styles.brandBadgeUnilagText}>UNILAG</Text>
-                </View>
-              </TouchableOpacity>
+              <View style={styles.brandHeaderLeft}>
+                {/* 1. Proper Hamburger Menu on top-left */}
+                <TouchableOpacity
+                  style={styles.hamburgerBtn}
+                  onPress={() => setIsDrawerOpen(true)}
+                  activeOpacity={0.75}
+                  accessibilityLabel="Open navigation menu"
+                  testID="hamburger-menu-btn"
+                >
+                  <Text style={styles.hamburgerIcon}>☰</Text>
+                </TouchableOpacity>
+
+                {/* 2. Brand Identity */}
+                <TouchableOpacity
+                  style={styles.brandLogoRow}
+                  onPress={() => {
+                    setIsCartOpen(false);
+                    setActiveTab('home');
+                  }}
+                  activeOpacity={0.9}
+                  testID="brand-home-btn"
+                >
+                  <Text style={styles.pizzaEmoji}>🍕</Text>
+                  <Text style={styles.brandTitle}>{Brand.shortName}</Text>
+                  <View style={styles.brandBadgeUnilag}>
+                    <Text style={styles.brandBadgeUnilagText}>UNILAG</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
             )}
 
             <View style={styles.headerRightActions}>
@@ -422,11 +593,12 @@ export default function App() {
                 </TouchableOpacity>
               )}
 
-              {/* Prominent Cart Button with Count Badge */}
+              {/* Prominent Cart Button with Count Badge on Right */}
               <TouchableOpacity
                 style={[styles.cartBadgeBtn, isCartOpen && styles.cartBadgeBtnActive]}
                 onPress={() => setIsCartOpen(!isCartOpen)}
                 activeOpacity={0.85}
+                testID="cart-header-btn"
               >
                 <Text style={styles.cartIcon}>{isCartOpen ? '✕' : '🛒'}</Text>
                 {!isCartOpen && cartState.itemCount > 0 && (
@@ -452,12 +624,18 @@ export default function App() {
             /* DEDICATED CART VIEW */
             <CartView
               cartState={cartState}
+              userId={customerProfile?.id}
               onExploreMenu={() => {
                 setIsCartOpen(false);
                 setActiveTab('menu');
               }}
               onEditItem={handleEditCartItem}
               onProceedToCheckout={() => setCheckoutVisible(true)}
+              suggestedProducts={pizzaProducts.slice(0, 3)}
+              onOpenCustomizer={(prod) => {
+                setIsCartOpen(false);
+                handleOpenCustomize(prod);
+              }}
             />
           ) : activeTab === 'home' ? (
             /* TAB 1: HOME SCREEN */
@@ -471,7 +649,7 @@ export default function App() {
               activeOrders={guestOrders}
               selectedCategorySlug={selectedCategorySlug}
               onSelectCategory={(slug) => {
-                setSelectedCategorySlug(slug);
+                handleSelectCategory(slug);
                 setActiveTab('menu');
               }}
               onOpenSearch={() => setActiveTab('menu')}
@@ -488,6 +666,8 @@ export default function App() {
                   setLandmarkPickerVisible(true);
                 }
               }}
+              activeSlideIndex={homePromoSlideIndex}
+              onSelectSlide={(idx) => setHomePromoSlideIndex(idx)}
             />
           ) : activeTab === 'menu' ? (
             /* TAB 2: MENU CATALOG SCREEN */
@@ -500,11 +680,15 @@ export default function App() {
                     style={styles.searchInput}
                     placeholder="Search pizzas, shakes, toppings, burgers..."
                     placeholderTextColor={Colors.textMuted}
+                    selectionColor={Colors.primaryRed}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                   />
                   {searchQuery.length > 0 && (
-                    <TouchableOpacity onPress={() => setSearchQuery('')}>
+                    <TouchableOpacity
+                      onPress={() => setSearchQuery('')}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
                       <Text style={styles.clearSearchText}>✕</Text>
                     </TouchableOpacity>
                   )}
@@ -515,7 +699,7 @@ export default function App() {
               <CategoryBar
                 categories={categories}
                 selectedCategorySlug={selectedCategorySlug}
-                onSelectCategory={(slug) => setSelectedCategorySlug(slug)}
+                onSelectCategory={handleSelectCategory}
               />
 
               {/* Product Listing */}
@@ -526,24 +710,30 @@ export default function App() {
                 </View>
               ) : filteredProducts.length === 0 ? (
                 <View style={styles.emptySearchContainer}>
-                  <Text style={styles.emptySearchEmoji}>🔍</Text>
-                  <Text style={styles.emptySearchTitle}>No matching products</Text>
+                  <Text style={styles.emptySearchEmoji}>{searchQuery.length > 0 ? '🔍' : '🍽️'}</Text>
+                  <Text style={styles.emptySearchTitle}>
+                    {searchQuery.length > 0 ? 'No matching products' : 'No items in this category'}
+                  </Text>
                   <Text style={styles.emptySearchSubtitle}>
-                    {`No items found for "${searchQuery}". Try a different keyword or category.`}
+                    {searchQuery.length > 0
+                      ? `No items found for "${searchQuery}". Try a different keyword or category.`
+                      : 'There are currently no items listed in this section. Browse our full menu below.'}
                   </Text>
                   <TouchableOpacity
                     style={styles.resetSearchBtn}
                     onPress={() => {
                       setSearchQuery('');
                       setSelectedCategorySlug('all');
+                      menuScrollViewRef.current?.scrollTo({ y: 0, animated: false });
                     }}
                   >
-                    <Text style={styles.resetSearchBtnText}>Reset Filter</Text>
+                    <Text style={styles.resetSearchBtnText}>View All Menu</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
                 <View style={{ flex: 1 }}>
                   <ScrollView
+                    ref={menuScrollViewRef}
                     contentContainerStyle={[
                       styles.productListContent,
                       cartState.itemCount > 0 && { paddingBottom: 100 },
@@ -559,29 +749,6 @@ export default function App() {
                       />
                     ))}
                   </ScrollView>
-
-                  {/* FLOATING CART BAR ON MENU SCREEN (Chowdeck UX benchmark) */}
-                  {cartState.itemCount > 0 && (
-                    <View style={styles.floatingCartBarContainer}>
-                      <TouchableOpacity
-                        style={styles.floatingCartBar}
-                        onPress={() => setIsCartOpen(true)}
-                        activeOpacity={0.9}
-                      >
-                        <View style={styles.floatingCartLeft}>
-                          <View style={styles.floatingCartBadge}>
-                            <Text style={styles.floatingCartBadgeText}>
-                              {cartState.itemCount}
-                            </Text>
-                          </View>
-                          <Text style={styles.floatingCartTotal}>
-                            ₦{cartState.estimatedTotal.toLocaleString()}
-                          </Text>
-                        </View>
-                        <Text style={styles.floatingCartAction}>View Cart →</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
                 </View>
               )}
             </View>
@@ -600,9 +767,41 @@ export default function App() {
               onRefreshProfile={refreshCustomer}
               onOpenKitchenDisplay={() => setIsKitchenMode(true)}
               onNavigateToOrders={() => setActiveTab('orders')}
+              onNavigateToHome={() => setActiveTab('home')}
             />
           )}
         </View>
+
+        {/* CHOWDECK SIGNATURE FLOATING CART BAR (Docked above BottomTabBar) */}
+        {!isCartOpen && cartState.itemCount > 0 && (
+          <View style={styles.floatingCartBarContainer} pointerEvents="box-none">
+            <TouchableOpacity
+              style={styles.floatingCartBar}
+              onPress={() => setIsCartOpen(true)}
+              activeOpacity={0.9}
+              testID="floating-cart-bar"
+            >
+              <View style={styles.floatingCartLeft}>
+                <View style={styles.floatingCartBadge}>
+                  <Text style={styles.floatingCartBadgeText}>
+                    {cartState.itemCount}
+                  </Text>
+                </View>
+                <View>
+                  <Text style={styles.floatingCartItemsLabel}>
+                    {cartState.itemCount === 1 ? '1 Item' : `${cartState.itemCount} Items`}
+                  </Text>
+                  <Text style={styles.floatingCartTotal}>
+                    ₦{cartState.estimatedTotal.toLocaleString()}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.floatingCartActionWrap}>
+                <Text style={styles.floatingCartAction}>View Cart →</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* 3. PERSISTENT CUSTOMER BOTTOM NAVIGATION BAR */}
         {!isCartOpen && (
@@ -647,6 +846,7 @@ export default function App() {
           customerProfile={customerProfile}
           onClose={() => setCheckoutVisible(false)}
           onProceedToPayment={handleProceedToPayment}
+          onPaymentSuccess={handlePaymentSuccess}
         />
 
         {/* PAYSTACK PAYMENT MODAL */}
@@ -671,7 +871,16 @@ export default function App() {
             items={receiptData.items}
             subtotal={receiptData.subtotal}
             deliveryFee={receiptData.deliveryFee}
+            discountAmount={receiptData.discountAmount}
             total={receiptData.total}
+            orderDate={receiptData.orderDate}
+            orderStatus={receiptData.orderStatus}
+            refundStatus={receiptData.refundStatus}
+            acceptedAt={receiptData.acceptedAt}
+            preparedAt={receiptData.preparedAt}
+            readyAt={receiptData.readyAt}
+            inTransitAt={receiptData.inTransitAt}
+            completedAt={receiptData.completedAt}
             onDone={handleReceiptDone}
             onTrackOrder={() => {
               const target = {
@@ -681,6 +890,66 @@ export default function App() {
               setReceiptData(null);
               setSelectedOrderForTracking(target);
               GuestReceiptStore.getAllReceipts().then(setGuestOrders);
+            }}
+            onCancelOrder={
+              receiptData.orderStatus === 'CONFIRMED'
+                ? () => {
+                    setCancellingReceiptOrder({
+                      orderId: receiptData.orderId,
+                      orderNumber: receiptData.orderNumber,
+                      orderTotal: receiptData.total,
+                      receiptToken: receiptData.receiptToken,
+                    });
+                  }
+                : undefined
+            }
+          />
+        )}
+
+        {/* CANCEL ORDER CONFIRMATION MODAL (Post-Checkout Receipt) */}
+        {cancellingReceiptOrder && (
+          <CancelOrderConfirmationModal
+            visible={Boolean(cancellingReceiptOrder)}
+            orderNumber={cancellingReceiptOrder.orderNumber}
+            orderTotal={cancellingReceiptOrder.orderTotal}
+            isCancelling={isCancellingReceiptOrder}
+            onClose={() => setCancellingReceiptOrder(null)}
+            onConfirm={async (reason) => {
+              try {
+                setIsCancellingReceiptOrder(true);
+                const res = await orderService.cancelOrderByCustomer(
+                  cancellingReceiptOrder.orderId,
+                  cancellingReceiptOrder.receiptToken,
+                  reason
+                );
+                if (res.success) {
+                  setCancellingReceiptOrder(null);
+                  setReceiptData(null);
+                  await GuestReceiptStore.getAllReceipts().then(setGuestOrders);
+                  Alert.alert(
+                    'Order Cancelled 🚫',
+                    'Your order has been cancelled successfully. If payment was completed, a refund has been flagged for manager review.'
+                  );
+                  setActiveTab('orders');
+                } else {
+                  Alert.alert(
+                    'Cannot Cancel Order',
+                    res.error || 'The kitchen may have already accepted your order.'
+                  );
+                  // Refresh order status from server to remove button if transitioned
+                  if (receiptData?.orderId) {
+                    orderService.getOrderReceipt(receiptData.orderId, receiptData.receiptToken).then((freshRes) => {
+                      if (freshRes.success && freshRes.order) {
+                        setReceiptData((prev) => prev ? { ...prev, orderStatus: freshRes.order!.status } : null);
+                      }
+                    });
+                  }
+                }
+              } catch (err: any) {
+                Alert.alert('Error', err?.message || 'Failed to cancel order.');
+              } finally {
+                setIsCancellingReceiptOrder(false);
+              }
             }}
           />
         )}
@@ -702,6 +971,98 @@ export default function App() {
             showToast(`Delivery set to ${landmark.name}`);
           }}
           onClose={() => setLandmarkPickerVisible(false)}
+        />
+
+        {/* 1. HAMBURGER NAVIGATION DRAWER */}
+        <NavigationDrawer
+          visible={isDrawerOpen}
+          onClose={() => setIsDrawerOpen(false)}
+          customer={customerProfile}
+          activeTab={activeTab}
+          onNavigateHome={() => {
+            setIsCartOpen(false);
+            setActiveTab('home');
+          }}
+          onNavigateMenu={() => {
+            setIsCartOpen(false);
+            setActiveTab('menu');
+          }}
+          onNavigateOrders={() => {
+            setIsCartOpen(false);
+            setActiveTab('orders');
+          }}
+          onNavigateAccount={() => {
+            setIsCartOpen(false);
+            setActiveTab('account');
+            refreshCustomer();
+          }}
+          onOpenAddresses={() => setSavedAddressesVisible(true)}
+          onOpenSupport={() => setSupportModalVisible(true)}
+          onOpenPromotions={() => setPromotionsModalVisible(true)}
+          onOpenAuth={(mode) => {
+            setAuthModalMode(mode);
+            setAuthModalVisible(true);
+          }}
+          onSignOut={handleDrawerSignOut}
+          onOpenKitchenDisplay={() => setIsKitchenMode(true)}
+          activeOrdersCount={guestOrders.length}
+        />
+
+        {/* 2. GLOBAL SAVED ADDRESSES MODAL (Accessible from Drawer) */}
+        <SavedAddressesModal
+          visible={savedAddressesVisible}
+          userId={customerProfile?.id}
+          onClose={() => setSavedAddressesVisible(false)}
+          onSelectAddress={(addr) => {
+            const landmark = deliveryPricingEngine.findLandmark(addr.landmarkId);
+            if (landmark) {
+              cartStore.setLandmark(landmark);
+            }
+            const fullAddr = addr.detailedAddress || addr.streetAddress || '';
+            if (fullAddr) {
+              cartStore.setDeliveryDetails(fullAddr, addr.deliveryNotes || undefined);
+            }
+            showToast(`Selected "${addr.title || addr.landmarkName || 'Campus'}" address`);
+          }}
+        />
+
+        {/* 3. GLOBAL HELP & SUPPORT MODAL (Accessible from Drawer) */}
+        <SupportModal
+          visible={supportModalVisible}
+          onClose={() => setSupportModalVisible(false)}
+        />
+
+        {/* 4. GLOBAL PROMOTIONS & OFFERS MODAL (Accessible from Drawer) */}
+        <PromotionsModal
+          visible={promotionsModalVisible}
+          onClose={() => setPromotionsModalVisible(false)}
+          onExploreMenu={(categorySlug) => {
+            setPromotionsModalVisible(false);
+            if (categorySlug && categorySlug !== 'all') {
+              setSelectedCategorySlug(categorySlug);
+            }
+            setIsCartOpen(false);
+            setActiveTab('menu');
+          }}
+        />
+
+        {/* 5. GLOBAL AUTHENTICATION MODAL (Accessible from Drawer & Top Header) */}
+        <AuthModal
+          visible={authModalVisible}
+          initialMode={authModalMode}
+          onClose={() => setAuthModalVisible(false)}
+          onSuccess={async () => {
+            const prof = await refreshCustomer();
+            if (prof?.fullName) {
+              showToast(`Welcome back, ${prof.fullName}! 🍕`);
+            } else {
+              showToast('Welcome to AY Pizza! 🍕');
+            }
+          }}
+          onNavigateHome={() => {
+            setActiveTab('home');
+            setIsCartOpen(false);
+          }}
         />
       </SafeAreaView>
 
@@ -738,6 +1099,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  brandHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  hamburgerBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: Colors.warmCream,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(39, 33, 31, 0.08)',
+    marginRight: 10,
+  },
+  hamburgerIcon: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.chocolateBrown,
   },
   brandLogoRow: {
     flexDirection: 'row',
@@ -785,6 +1166,20 @@ const styles = StyleSheet.create({
   headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  accountHeaderBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.warmCream,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    marginRight: 8,
+  },
+  accountHeaderIcon: {
+    fontSize: 16,
   },
   cartBadgeBtn: {
     width: 42,
@@ -950,48 +1345,63 @@ const styles = StyleSheet.create({
   },
   floatingCartBarContainer: {
     position: 'absolute',
-    bottom: 12,
-    left: 16,
-    right: 16,
+    bottom: 74,
+    left: 14,
+    right: 14,
+    zIndex: 99,
   },
   floatingCartBar: {
     backgroundColor: Colors.primaryRed,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     shadowColor: Colors.primaryRed,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.38,
+    shadowRadius: 10,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   floatingCartLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
   },
   floatingCartBadge: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    marginRight: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
   },
   floatingCartBadgeText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '900',
     color: Colors.primaryRed,
   },
+  floatingCartItemsLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.85)',
+    textTransform: 'uppercase',
+  },
   floatingCartTotal: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '900',
+  },
+  floatingCartActionWrap: {
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 12,
   },
   floatingCartAction: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
   },
   accessDeniedContainer: {

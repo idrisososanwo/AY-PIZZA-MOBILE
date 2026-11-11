@@ -5,6 +5,28 @@ import { Product } from '../types/catalog';
 import { Radius, Shadows, Typography } from '../constants/theme';
 import { getProductImage } from '../constants/images';
 
+export const getCulinaryBadge = (
+  product: Product
+): { label: string; icon: string } | null => {
+  const name = product.name.toLowerCase();
+  const desc = product.description.toLowerCase();
+  if (
+    name.includes('tikka') ||
+    name.includes('sweet chili') ||
+    name.includes('chili') ||
+    desc.includes('spicy')
+  ) {
+    return { label: 'Spicy', icon: '🌶️' };
+  }
+  if (name.includes('veggie') || name.includes('margherita')) {
+    return { label: 'Vegetarian', icon: '🌱' };
+  }
+  if (product.categorySlug === 'icecream') {
+    return { label: 'Real Dairy', icon: '🍨' };
+  }
+  return null;
+};
+
 interface ProductCardProps {
   product: Product;
   onPress: (product: Product) => void;
@@ -23,6 +45,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   const formattedPrice = `₦${product.basePrice.toLocaleString()}`;
   const foodImage = getProductImage(product);
+  const culinaryBadge = getCulinaryBadge(product);
 
   return (
     <TouchableOpacity
@@ -34,6 +57,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         {/* Appetizing Food Thumbnail */}
         <View style={styles.imageContainer}>
           <Image source={foodImage} style={styles.productImage} resizeMode="cover" />
+          {culinaryBadge && isAvailable && (
+            <View style={styles.culinaryBadge}>
+              <Text style={styles.culinaryBadgeText}>
+                {culinaryBadge.icon} {culinaryBadge.label}
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.headerInfo}>
@@ -74,8 +104,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               onPress={() => onPressCustomize(product)}
               disabled={!isAvailable}
               activeOpacity={0.8}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
-              <Text style={styles.actionButtonText}>
+              <Text
+                style={[
+                  styles.actionButtonText,
+                  !hasCustomizations && isAvailable && styles.actionButtonTextAdd,
+                ]}
+              >
                 {!isAvailable
                   ? 'Unavailable'
                   : hasCustomizations
@@ -114,6 +150,21 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: Colors.surfaceCream,
     marginRight: 10,
+    position: 'relative',
+  },
+  culinaryBadge: {
+    position: 'absolute',
+    bottom: 3,
+    left: 3,
+    backgroundColor: 'rgba(39, 33, 31, 0.88)',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: Radius.xs,
+  },
+  culinaryBadgeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#FFF8EC',
   },
   productImage: {
     width: '100%',
@@ -191,6 +242,7 @@ const styles = StyleSheet.create({
   actionButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
+    minHeight: 36,
     borderRadius: Radius.pill,
     justifyContent: 'center',
     alignItems: 'center',
@@ -207,5 +259,9 @@ const styles = StyleSheet.create({
   actionButtonText: {
     ...Typography.button,
     fontSize: 11,
+  },
+  actionButtonTextAdd: {
+    color: Colors.charcoal,
+    fontWeight: '800',
   },
 });

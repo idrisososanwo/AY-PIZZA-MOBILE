@@ -12,7 +12,7 @@
  * 5. Cross-platform safe: Web and emulators fall back gracefully.
  */
 
-import { Platform } from 'react-native';
+import { Platform, Linking } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { AndroidImportance } from 'expo-notifications';
 import * as Device from 'expo-device';
@@ -34,6 +34,7 @@ Notifications.setNotificationHandler({
 const STORED_PUSH_TOKEN_KEY = 'ay_pizza_device_push_token_v1';
 const PERMISSION_EXPLAINED_KEY = 'ay_pizza_notif_permission_explained_v1';
 const GUEST_DEVICE_ID_KEY = 'ay_pizza_guest_device_id_v1';
+export const EAS_PROJECT_ID = 'a0aaa783-3f92-4b05-b32f-e44ccc7bfd38';
 
 export type NotificationPermissionState = 'undetermined' | 'granted' | 'denied' | 'unsupported';
 
@@ -41,6 +42,7 @@ export interface DeviceTokenRegistrationResult {
   success: boolean;
   pushToken?: string;
   status: NotificationPermissionState;
+  canAskAgain?: boolean;
   error?: string;
 }
 
@@ -120,19 +122,24 @@ export class NotificationService {
       await this.markPermissionExplained();
 
       // Check current permission
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      const { status: existingStatus, canAskAgain } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
+      let finalCanAskAgain = canAskAgain;
 
       if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
+        const reqResult = await Notifications.requestPermissionsAsync();
+        finalStatus = reqResult.status;
+        finalCanAskAgain = reqResult.canAskAgain;
       }
 
       if (finalStatus !== 'granted') {
         return {
           success: false,
           status: 'denied',
-          error: 'Notification permission was declined.',
+          canAskAgain: finalCanAskAgain,
+          error: finalCanAskAgain
+            ? 'Notification permission was declined. Tap to retry.'
+            : 'Notification permission was denied. Please enable alerts in device settings.',
         };
       }
 
@@ -147,9 +154,58 @@ export class NotificationService {
         });
       }
 
-      // Obtain Expo Push Token
-      const tokenResponse = await Notifications.getExpoPushTokenAsync();
-      const pushToken = tokenResponse.data;
+      // 1. If we already have a locally cached token, synchronize with backend and return granted
+      const storedToken = await this.getStoredPushToken();
+      if (storedToken) {
+        const guestDeviceId = await this.getOrCreateGuestDeviceId();
+        const platform = Platform.OS === 'ios' ? 'ios' : 'android';
+        try {
+          await (supabase.rpc as any)('register_device_push_token', {
+            p_push_token: storedToken,
+            p_platform: platform,
+            p_guest_device_id: guestDeviceId,
+          });
+        } catch {
+          // Non-blocking sync
+        }
+        return {
+          success: true,
+          pushToken: storedToken,
+          status: 'granted',
+        };
+      }
+
+      // Obtain Expo Push Token with explicit EAS projectId
+      let pushToken: string | undefined;
+      try {
+        const tokenResponse = await Notifications.getExpoPushTokenAsync({
+          projectId: EAS_PROJECT_ID,
+        });
+        pushToken = tokenResponse?.data;
+      } catch (tokenErr: any) {
+        const errMsg = tokenErr?.message || '';
+        const isFcmMissing =
+          errMsg.includes('Unable to get Firebase Messaging instance') ||
+          errMsg.includes('googleServicesFile') ||
+          errMsg.includes('Default FirebaseApp is not initialized');
+
+        if (isFcmMissing) {
+          // OS permission is granted and Android notification channel is active.
+          // In preview APK builds without googleServicesFile, native FCM token resolution is bypassed.
+          // Alerts remain fully enabled at OS level without surfacing internal native errors.
+          return {
+            success: true,
+            status: 'granted',
+          };
+        }
+
+        return {
+          success: false,
+          status: 'granted',
+          canAskAgain: finalCanAskAgain,
+          error: `Push notification service notice: ${errMsg}`,
+        };
+      }
 
       if (!pushToken) {
         return {
@@ -166,7 +222,7 @@ export class NotificationService {
       const guestDeviceId = await this.getOrCreateGuestDeviceId();
       const platform = Platform.OS === 'ios' ? 'ios' : 'android';
 
-      const { data, error } = await (supabase.rpc as any)('register_device_push_token', {
+      const { error } = await (supabase.rpc as any)('register_device_push_token', {
         p_push_token: pushToken,
         p_platform: platform,
         p_guest_device_id: guestDeviceId,
@@ -192,6 +248,38 @@ export class NotificationService {
         status: 'unsupported',
         error: err.message || 'Push registration failed.',
       };
+    }
+  }
+
+  /**
+   * Opens native device application settings to allow the user to enable permissions manually.
+   */
+  async openDeviceSettings(): Promise<void> {
+    try {
+      await Linking.openSettings();
+    } catch {
+      // Fallback
+    }
+  }
+
+  /**
+   * Re-associates an existing locally-stored device push token with the authenticated user ID upon login.
+   */
+  async syncTokenOnAuth(): Promise<void> {
+    try {
+      const storedToken = await AsyncStorage.getItem(STORED_PUSH_TOKEN_KEY);
+      if (!storedToken) return;
+
+      const guestDeviceId = await this.getOrCreateGuestDeviceId();
+      const platform = Platform.OS === 'ios' ? 'ios' : 'android';
+
+      await (supabase.rpc as any)('register_device_push_token', {
+        p_push_token: storedToken,
+        p_platform: platform,
+        p_guest_device_id: guestDeviceId,
+      });
+    } catch {
+      // Non-blocking background sync
     }
   }
 

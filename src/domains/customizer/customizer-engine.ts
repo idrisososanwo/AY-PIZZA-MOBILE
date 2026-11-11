@@ -6,6 +6,7 @@
 
 import { Product, ProductSize, CustomizationGroup, CustomizationOption } from '../../types/catalog';
 import { SelectedCustomization } from '../../types/order';
+import { HALF_AND_HALF_OPTION_ID } from '../catalog/catalog-repository';
 import { calculateHalfAndHalfSurcharge } from '../order/order-calculator';
 import { CartItem, CartCustomizerSnapshot } from '../cart/cart-types';
 import { CustomizerState, CustomizerPriceBreakdown, CustomizerValidationResult } from './customizer-types';

@@ -60,6 +60,7 @@ class KdsService {
           rejection_reason,
           staff_notes,
           assigned_staff_id,
+          assigned_rider_id,
           created_at,
           updated_at,
           accepted_at,
@@ -108,6 +109,7 @@ class KdsService {
           rejectionReason: row.rejection_reason,
           staffNotes: row.staff_notes,
           assignedStaffId: row.assigned_staff_id,
+          assignedRiderId: row.assigned_rider_id,
           version: Number(row.version ?? 1),
           refundStatus: row.refund_status ?? 'NOT_APPLICABLE',
           createdAt: row.created_at,
@@ -267,6 +269,7 @@ class KdsService {
           rejection_reason,
           staff_notes,
           assigned_staff_id,
+          assigned_rider_id,
           created_at,
           updated_at,
           accepted_at,
@@ -311,6 +314,7 @@ class KdsService {
         rejectionReason: data.rejection_reason,
         staffNotes: data.staff_notes,
         assignedStaffId: data.assigned_staff_id,
+        assignedRiderId: data.assigned_rider_id,
         version: Number(data.version ?? 1),
         refundStatus: data.refund_status ?? 'NOT_APPLICABLE',
         createdAt: data.created_at,
@@ -390,7 +394,18 @@ class KdsService {
         };
       }
 
-      const result = data as TransitionOrderResult;
+      const result: TransitionOrderResult = {
+        success: Boolean(data?.success),
+        orderId: data?.order_id ?? data?.orderId,
+        orderNumber: data?.order_number ?? data?.orderNumber,
+        previousStatus: data?.previous_status ?? data?.previousStatus,
+        newStatus: data?.new_status ?? data?.newStatus,
+        version: data?.version,
+        refundStatus: data?.refund_status ?? data?.refundStatus,
+        code: data?.code,
+        message: data?.message,
+        currentStatus: data?.current_status ?? data?.currentStatus,
+      };
 
       if (result.success && local) {
         local.status = targetStatus;
@@ -418,6 +433,47 @@ class KdsService {
       }
 
       return result;
+    } catch (err: any) {
+      return {
+        success: false,
+        code: 'NETWORK_OR_SERVER_ERROR',
+        message: err?.message || 'Error communicating with database server.',
+      };
+    }
+  }
+
+  /**
+   * Assigns a delivery rider to an order
+   */
+  async assignOrderRider(params: {
+    orderId: string;
+    riderId: string;
+    notes?: string;
+  }): Promise<{ success: boolean; code?: string; message?: string }> {
+    try {
+      const { data, error } = await (supabase.rpc as any)('assign_order_rider', {
+        p_order_id: params.orderId,
+        p_rider_id: params.riderId,
+        p_notes: params.notes || null,
+      });
+
+      if (error) {
+        return {
+          success: false,
+          code: error.code || 'RPC_ERROR',
+          message: error.message || 'Failed to assign rider to order.',
+        };
+      }
+
+      if (data?.success) {
+        const local = this.orders.get(params.orderId);
+        if (local) {
+          local.assignedRiderId = params.riderId;
+          this.notifySubscribers();
+        }
+      }
+
+      return data;
     } catch (err: any) {
       return {
         success: false,

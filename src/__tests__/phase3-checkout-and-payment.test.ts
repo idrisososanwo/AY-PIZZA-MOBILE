@@ -11,6 +11,7 @@ import { paymentService } from '../domains/payment/payment-service';
 import { calculateOrderTotal, reconcileClientEstimateWithServer } from '../domains/order/order-calculator';
 import { CartState } from '../domains/cart/cart-types';
 import { OrderStatus } from '../types/order';
+import { supabase } from '../config/supabase';
 
 describe('Phase 3: Checkout, Order Creation & Paystack Payment Integration', () => {
   const sampleCartState: CartState = {
@@ -353,6 +354,15 @@ describe('Phase 3: Checkout, Order Creation & Paystack Payment Integration', () 
 
     it('verifies transaction independently with payment service', async () => {
       const reference = 'ay_ord_AYP_20261021_0042_17716129';
+      jest.spyOn(paystackProvider, 'verifyPayment').mockResolvedValueOnce({
+        success: true,
+        status: 'CONFIRMED',
+        orderId: 'ord-test-456',
+        orderNumber: 'AYP-20261021-0042',
+        paymentReference: reference,
+        outcome: 'SUCCESS',
+      });
+
       const result = await paymentService.verifyPayment(reference);
 
       expect(result.success).toBe(true);

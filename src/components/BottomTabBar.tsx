@@ -87,6 +87,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 4,
+    minHeight: 48,
     position: 'relative',
   },
   tabButtonActive: {},

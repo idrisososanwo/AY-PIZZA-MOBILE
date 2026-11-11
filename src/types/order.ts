@@ -81,11 +81,13 @@ export interface Order {
   acceptedAt?: string | null;
   preparedAt?: string | null;
   readyAt?: string | null;
+  inTransitAt?: string | null;
   completedAt?: string | null;
   staffNotes?: string | null;
   assignedStaffId?: string | null;
+  assignedRiderId?: string | null;
   version?: number;
-  refundStatus?: 'NOT_APPLICABLE' | 'REFUND_REQUIRED' | 'REFUND_PENDING' | 'REFUNDED';
+  refundStatus?: 'NOT_APPLICABLE' | 'REFUND_REQUIRED' | 'REFUND_PENDING' | 'REFUNDED' | 'REFUND_FAILED';
   items?: OrderItem[];
   events?: OrderStatusEvent[];
   createdAt: string;

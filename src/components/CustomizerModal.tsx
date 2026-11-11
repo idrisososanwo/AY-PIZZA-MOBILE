@@ -95,7 +95,12 @@ const CustomizerModalContent: React.FC<CustomizerModalContentProps> = ({
                 {product.name}
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeButton}
+              activeOpacity={0.8}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <Text style={styles.closeButtonText}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -140,7 +145,7 @@ const CustomizerModalContent: React.FC<CustomizerModalContentProps> = ({
 
             {/* 2. HALF & HALF PIZZA BUILDER (Pizzas Only) */}
             {isPizza && (
-              <View style={styles.section}>
+              <View style={styles.section} testID="half-and-half-section">
                 <View style={styles.halfAndHalfHeader}>
                   <View style={styles.halfAndHalfInfo}>
                     <Text style={styles.sectionTitle}>2. Half & Half Pizza?</Text>
@@ -161,47 +166,135 @@ const CustomizerModalContent: React.FC<CustomizerModalContentProps> = ({
                   <Switch
                     value={state.isHalfAndHalf}
                     onValueChange={(val) => setState(toggleHalfAndHalf(state, val))}
-                    trackColor={{ false: '#3e2723', true: Colors.lava }}
-                    thumbColor={state.isHalfAndHalf ? Colors.neon : '#f4f3f4'}
+                    trackColor={{ false: Colors.borderLight, true: Colors.primaryRed }}
+                    thumbColor={state.isHalfAndHalf ? Colors.goldenYellow : '#f4f3f4'}
                   />
                 </View>
 
                 {state.isHalfAndHalf && (
-                  <View style={styles.halfAndHalfPicker}>
-                    <Text style={styles.pickerPrompt}>Choose Second Flavor:</Text>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.flavorsScroll}
-                    >
-                      {allPizzaProducts
-                        .filter((p) => p.id !== product.id && p.isAvailable)
-                        .map((secProd) => {
-                          const isSecSelected = state.halfSecondaryProduct?.id === secProd.id;
-                          return (
-                            <TouchableOpacity
-                              key={secProd.id}
-                              style={[
-                                styles.flavorPill,
-                                isSecSelected && styles.flavorPillSelected,
-                              ]}
-                              onPress={() =>
-                                setState(setHalfSecondaryProduct(state, secProd))
-                              }
-                              activeOpacity={0.8}
-                            >
-                              <Text
+                  <View style={styles.halfAndHalfInteractiveContainer}>
+                    {/* VISUAL PIZZA SPLIT PREVIEW */}
+                    <View style={styles.splitVisualWrapper}>
+                      <View style={styles.splitCircleContainer} testID="pizza-split-preview">
+                        {/* Left Half (Primary) */}
+                        <View style={styles.splitHalfLeft}>
+                          <Image
+                            source={getProductImage(product)}
+                            style={styles.splitImageLeft}
+                            resizeMode="cover"
+                          />
+                          <View style={styles.splitTagBadgeLeft}>
+                            <Text style={styles.splitTagBadgeText}>Left 🍕</Text>
+                          </View>
+                        </View>
+
+                        {/* Center Seam / Divider */}
+                        <View style={styles.splitDividerLine} />
+
+                        {/* Right Half (Secondary) */}
+                        <View style={styles.splitHalfRight}>
+                          {state.halfSecondaryProduct ? (
+                            <>
+                              <Image
+                                source={getProductImage(state.halfSecondaryProduct)}
+                                style={styles.splitImageRight}
+                                resizeMode="cover"
+                              />
+                              <View style={styles.splitTagBadgeRight}>
+                                <Text style={styles.splitTagBadgeText}>Right 🍕</Text>
+                              </View>
+                            </>
+                          ) : (
+                            <View style={styles.splitEmptyPlaceholder}>
+                              <Text style={styles.splitEmptyIcon}>➕</Text>
+                              <Text style={styles.splitEmptyText}>Pick 2nd Flavor</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+
+                      {/* Two-Slot Label Cards */}
+                      <View style={styles.twoSlotCardsRow}>
+                        <View style={styles.slotCardLeft}>
+                          <Text style={styles.slotTagLeft}>HALF 1 (LEFT)</Text>
+                          <Text style={styles.slotName} numberOfLines={1}>{product.name}</Text>
+                          <Text style={styles.slotStatus}>Base Flavor (Locked)</Text>
+                        </View>
+
+                        <View style={[styles.slotCardRight, !state.halfSecondaryProduct && styles.slotCardRightIncomplete]}>
+                          <Text style={styles.slotTagRight}>HALF 2 (RIGHT)</Text>
+                          <Text style={styles.slotName} numberOfLines={1}>
+                            {state.halfSecondaryProduct ? state.halfSecondaryProduct.name : 'Not Selected'}
+                          </Text>
+                          <Text style={state.halfSecondaryProduct ? styles.slotStatusSelected : styles.slotStatusRequired}>
+                            {state.halfSecondaryProduct ? '✓ Flavor Selected' : '⚠️ Pick Flavor Below'}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* SECOND FLAVOR SELECTION TRAY */}
+                    <View style={styles.halfAndHalfPicker}>
+                      <View style={styles.pickerHeaderRow}>
+                        <Text style={styles.pickerPrompt}>Choose Second Pizza Flavor:</Text>
+                        {state.halfSecondaryProduct && (
+                          <TouchableOpacity
+                            onPress={() => setState(setHalfSecondaryProduct(state, null))}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <Text style={styles.clearSecondFlavorText}>Clear ✕</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.flavorsScroll}
+                      >
+                        {allPizzaProducts
+                          .filter((p) => p.id !== product.id && p.isAvailable)
+                          .map((secProd) => {
+                            const isSecSelected = state.halfSecondaryProduct?.id === secProd.id;
+                            return (
+                              <TouchableOpacity
+                                key={secProd.id}
                                 style={[
-                                  styles.flavorPillText,
-                                  isSecSelected && styles.flavorPillTextSelected,
+                                  styles.flavorPill,
+                                  isSecSelected && styles.flavorPillSelected,
                                 ]}
+                                onPress={() =>
+                                  setState(setHalfSecondaryProduct(state, secProd))
+                                }
+                                activeOpacity={0.8}
+                                testID={`sec-flavor-${secProd.id}`}
                               >
-                                {secProd.name}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                    </ScrollView>
+                                <View style={styles.flavorPillThumbContainer}>
+                                  <Image
+                                    source={getProductImage(secProd)}
+                                    style={styles.flavorPillThumb}
+                                    resizeMode="cover"
+                                  />
+                                </View>
+                                <View style={styles.flavorPillTextColumn}>
+                                  <Text
+                                    style={[
+                                      styles.flavorPillText,
+                                      isSecSelected && styles.flavorPillTextSelected,
+                                    ]}
+                                    numberOfLines={1}
+                                  >
+                                    {secProd.name}
+                                  </Text>
+                                  <Text style={[styles.flavorPillStatus, isSecSelected && styles.flavorPillStatusSelected]}>
+                                    {isSecSelected ? '✓ Selected' : '+ Select'}
+                                  </Text>
+                                </View>
+                              </TouchableOpacity>
+                            );
+                          })}
+                      </ScrollView>
+                    </View>
                   </View>
                 )}
               </View>
@@ -316,7 +409,8 @@ const CustomizerModalContent: React.FC<CustomizerModalContentProps> = ({
               <TextInput
                 style={styles.textInput}
                 placeholder="e.g. Extra crispy crust, less spicy sauce..."
-                placeholderTextColor="rgba(255, 232, 214, 0.4)"
+                placeholderTextColor={Colors.textMuted}
+                selectionColor={Colors.primaryRed}
                 multiline
                 numberOfLines={3}
                 value={state.specialInstructions}
@@ -341,6 +435,7 @@ const CustomizerModalContent: React.FC<CustomizerModalContentProps> = ({
                   style={styles.stepperButton}
                   onPress={() => setState(setQuantity(state, state.quantity - 1))}
                   disabled={state.quantity <= 1}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 >
                   <Text style={styles.stepperButtonText}>−</Text>
                 </TouchableOpacity>
@@ -348,6 +443,7 @@ const CustomizerModalContent: React.FC<CustomizerModalContentProps> = ({
                 <TouchableOpacity
                   style={styles.stepperButton}
                   onPress={() => setState(setQuantity(state, state.quantity + 1))}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 >
                   <Text style={styles.stepperButtonText}>+</Text>
                 </TouchableOpacity>
@@ -355,7 +451,11 @@ const CustomizerModalContent: React.FC<CustomizerModalContentProps> = ({
 
               {/* Price Breakdown */}
               <View style={styles.footerPriceContainer}>
-                <Text style={styles.footerPriceLabel}>Estimated Line Total</Text>
+                <Text style={styles.footerPriceLabel}>
+                  {state.isHalfAndHalf
+                    ? `Estimated Total (+₦${priceBreakdown.halfAndHalfSurcharge.toLocaleString()} split)`
+                    : 'Estimated Line Total'}
+                </Text>
                 <Text style={styles.footerPriceValue}>
                   ₦{priceBreakdown.lineTotal.toLocaleString()}
                 </Text>
@@ -369,7 +469,7 @@ const CustomizerModalContent: React.FC<CustomizerModalContentProps> = ({
               activeOpacity={0.8}
             >
               <Text style={styles.saveButtonText}>
-                {existingCartItem ? 'Save Item Changes 💾' : 'Add to Local Cart 🛒'}
+                {existingCartItem ? 'Save Item Changes 💾' : `Add to Cart • ₦${priceBreakdown.lineTotal.toLocaleString()} 🛒`}
               </Text>
             </TouchableOpacity>
           </View>
@@ -565,34 +665,221 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 12,
   },
-  halfAndHalfPicker: {
+  halfAndHalfInteractiveContainer: {
     marginTop: 12,
     backgroundColor: Colors.cardWhite,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  splitVisualWrapper: {
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  splitCircleContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    borderWidth: 3,
+    borderColor: Colors.primaryRed,
+    backgroundColor: Colors.surfaceCream,
+    marginBottom: 12,
+  },
+  splitHalfLeft: {
+    width: 60,
+    height: 120,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: Colors.surfaceCream,
+  },
+  splitImageLeft: {
+    width: 120,
+    height: 120,
+    position: 'absolute',
+    left: 0,
+    top: 0,
+  },
+  splitTagBadgeLeft: {
+    position: 'absolute',
+    top: 6,
+    left: 4,
+    backgroundColor: 'rgba(39, 33, 31, 0.85)',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    zIndex: 5,
+  },
+  splitTagBadgeRight: {
+    position: 'absolute',
+    top: 6,
+    right: 4,
+    backgroundColor: 'rgba(39, 33, 31, 0.85)',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    zIndex: 5,
+  },
+  splitTagBadgeText: {
+    color: '#FFF8EC',
+    fontSize: 8,
+    fontWeight: '800',
+  },
+  splitDividerLine: {
+    width: 2,
+    height: '100%',
+    backgroundColor: '#FFFFFF',
+    zIndex: 10,
+  },
+  splitHalfRight: {
+    width: 60,
+    height: 120,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: Colors.warmCream,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  splitImageRight: {
+    width: 120,
+    height: 120,
+    position: 'absolute',
+    left: -60,
+    top: 0,
+  },
+  splitEmptyPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 4,
+  },
+  splitEmptyIcon: {
+    fontSize: 18,
+    marginBottom: 2,
+  },
+  splitEmptyText: {
+    fontSize: 8,
+    color: Colors.textSecondary,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  twoSlotCardsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    width: '100%',
+  },
+  slotCardLeft: {
+    flex: 1,
+    backgroundColor: Colors.surfaceCream,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  slotCardRight: {
+    flex: 1,
+    backgroundColor: Colors.surfaceCream,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  slotCardRightIncomplete: {
+    borderColor: Colors.primaryRed,
+    backgroundColor: '#FFF5F5',
+  },
+  slotTagLeft: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: Colors.charcoal,
+    letterSpacing: 0.5,
+  },
+  slotTagRight: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: Colors.primaryRed,
+    letterSpacing: 0.5,
+  },
+  slotName: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.charcoal,
+    marginTop: 2,
+  },
+  slotStatus: {
+    fontSize: 10,
+    color: Colors.textSecondary,
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  slotStatusSelected: {
+    fontSize: 10,
+    color: Colors.freshGreen,
+    marginTop: 2,
+    fontWeight: '800',
+  },
+  slotStatusRequired: {
+    fontSize: 10,
+    color: Colors.primaryRed,
+    marginTop: 2,
+    fontWeight: '800',
+  },
+  halfAndHalfPicker: {
+    marginTop: 8,
+    backgroundColor: Colors.surfaceCream,
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.borderLight,
   },
+  pickerHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  clearSecondFlavorText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primaryRed,
+  },
   pickerPrompt: {
     fontSize: 12,
     fontWeight: '700',
     color: Colors.charcoal,
-    marginBottom: 8,
   },
   flavorsScroll: {
     gap: 8,
   },
   flavorPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.warmCream,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 12,
+    backgroundColor: Colors.cardWhite,
     borderWidth: 1,
     borderColor: Colors.borderLight,
   },
   flavorPillSelected: {
-    backgroundColor: Colors.primaryRed,
+    backgroundColor: '#FFF1EF',
     borderColor: Colors.primaryRed,
+  },
+  flavorPillThumbContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    overflow: 'hidden',
+    marginRight: 8,
+    backgroundColor: Colors.surfaceCream,
+  },
+  flavorPillThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  flavorPillTextColumn: {
+    justifyContent: 'center',
   },
   flavorPillText: {
     fontSize: 12,
@@ -600,7 +887,17 @@ const styles = StyleSheet.create({
     color: Colors.charcoal,
   },
   flavorPillTextSelected: {
-    color: '#ffffff',
+    color: Colors.primaryRed,
+    fontWeight: '800',
+  },
+  flavorPillStatus: {
+    fontSize: 9,
+    color: Colors.textMuted,
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  flavorPillStatusSelected: {
+    color: Colors.primaryRed,
     fontWeight: '800',
   },
   flavorGrid: {
@@ -649,6 +946,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: Colors.cardWhite,
     padding: 10,
+    minHeight: 44,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: Colors.borderLight,
@@ -764,6 +1062,7 @@ const styles = StyleSheet.create({
   saveButton: {
     backgroundColor: Colors.primaryRed,
     borderRadius: 24,
+    minHeight: 48,
     paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',

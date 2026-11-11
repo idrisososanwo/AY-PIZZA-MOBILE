@@ -10,11 +10,92 @@ import {
 import { Colors } from '../constants/colors';
 import { Brand } from '../constants/brand';
 import { FoodImages, getProductImage } from '../constants/images';
-import { Product, ProductCategory } from '../types/catalog';
+import {
+  Product,
+  ProductCategory,
+  normalizeCategorySlug,
+  isProductInCategory,
+} from '../types/catalog';
 import { CustomerProfile } from '../domains/customer/customer-types';
 import { GuestReceiptRecord } from '../domains/order/guest-receipt-store';
 import { DeliveryLandmark, FulfillmentType } from '../types/delivery';
 import { Radius, Shadows, Typography } from '../constants/theme';
+
+export interface PromoSlide {
+  id: string;
+  badge: string;
+  secondaryBadge?: string;
+  title: string;
+  subtitle: string;
+  image: any;
+  actionText: string;
+  actionType: 'menu' | 'category' | 'coupon';
+  categorySlug?: string;
+  couponCode?: string;
+  pills: string[];
+}
+
+export const DEFAULT_PROMO_SLIDES: PromoSlide[] = [
+  {
+    id: 'artisan-oven-baked',
+    badge: '⚡ STONE-OVEN BAKED',
+    secondaryBadge: 'Opposite King Jaja',
+    title: 'Artisan Oven-Baked Pizza',
+    subtitle:
+      'Proofed dough rolled daily, rich marinara sauce, and 100% melted mozzarella. Baked fresh right on campus.',
+    image: FoodImages.heroBanner,
+    actionText: 'Explore Full Menu 🍕',
+    actionType: 'menu',
+    pills: ['🍕 5 Crust Sizes', '•', '🛵 Hostel Delivery'],
+  },
+  {
+    id: 'campus-delivery',
+    badge: '🛵 UNILAG CAMPUS DELIVERY',
+    secondaryBadge: 'Direct to Hostels',
+    title: 'Fast Delivery Across Campus',
+    subtitle:
+      'Prompt hostel delivery to King Jaja, Moremi, Mariere, Madam Tinubu, Biobaku, El-Kanemi, and all UNILAG faculties.',
+    image: FoodImages.bbqChicken,
+    actionText: 'Order For Delivery 🛵',
+    actionType: 'menu',
+    pills: ['⚡ 25–35 Mins', '•', '📍 Realtime Tracking'],
+  },
+  {
+    id: 'shakes-ice-cream',
+    badge: '🍦 FRESH DESSERTS',
+    secondaryBadge: 'Real Dairy',
+    title: 'Creamy Soft-Serve & Shakes',
+    subtitle:
+      'Thick, creamy milkshakes crafted with fresh ingredients, plus swirl soft-serve cups with crunchy toppings.',
+    image: FoodImages.milkshake,
+    actionText: 'View Shakes & Cones 🍨',
+    actionType: 'category',
+    categorySlug: 'icecream',
+    pills: ['🥛 100% Real Dairy', '•', '🍫 Oreo & Vanilla'],
+  },
+];
+
+export const getCulinaryBadge = (
+  product: Product
+): { label: string; icon: string } | null => {
+  const name = product.name.toLowerCase();
+  const desc = product.description.toLowerCase();
+  if (
+    name.includes('tikka') ||
+    name.includes('sweet chili') ||
+    name.includes('chili') ||
+    desc.includes('spicy')
+  ) {
+    return { label: 'Spicy', icon: '🌶️' };
+  }
+  if (name.includes('veggie') || name.includes('margherita')) {
+    return { label: 'Vegetarian', icon: '🌱' };
+  }
+  if (product.categorySlug === 'icecream') {
+    return { label: 'Real Dairy', icon: '🍨' };
+  }
+  return null;
+};
 
 export interface HomeScreenProps {
   customer: CustomerProfile | null;
@@ -33,6 +114,10 @@ export interface HomeScreenProps {
   onOpenFulfillmentPicker: () => void;
   onExploreMenu: () => void;
   onToggleFulfillmentType?: (type: FulfillmentType) => void;
+  activeSlideIndex?: number;
+  onSelectSlide?: (index: number) => void;
+  promoSlidesOverride?: PromoSlide[];
+  isKitchenOpenOverride?: boolean;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
@@ -52,6 +137,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onOpenFulfillmentPicker,
   onExploreMenu,
   onToggleFulfillmentType,
+  activeSlideIndex = 0,
+  onSelectSlide,
+  promoSlidesOverride,
+  isKitchenOpenOverride,
 }) => {
   const isDelivery = fulfillmentType === 'delivery';
   const latestActiveOrder = activeOrders && activeOrders.length > 0 ? activeOrders[0] : null;
@@ -65,303 +154,484 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   // Filter products shown on Home based on the active category
   const displayedProducts =
     selectedCategorySlug && selectedCategorySlug !== 'all'
-      ? productCatalog.filter((p) => p.categorySlug === selectedCategorySlug).slice(0, 6)
+      ? productCatalog.filter((p) => isProductInCategory(p.categorySlug, selectedCategorySlug)).slice(0, 6)
       : popularProducts.length > 0
         ? popularProducts.slice(0, 6)
         : productCatalog.slice(0, 6);
 
-  return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
-      testID="home-screen-scroll"
-    >
-      {/* 1. DELIVERY / PICKUP SEGMENTED HEADER */}
-      <View style={styles.fulfillmentCard}>
-        {/* Fulfillment Type Segmented Selector */}
-        <View style={styles.segmentContainer}>
-          <TouchableOpacity
+  // Dedicated shelf for ice cream & shakes (when allProducts has items)
+  const dessertProducts = (allProducts || []).filter(
+    (p) => p.categorySlug === 'icecream' && p.isAvailable !== false
+  );
+
+  // Active promo slides with graceful fallback
+  const promoSlides =
+    promoSlidesOverride && promoSlidesOverride.length > 0
+      ? promoSlidesOverride
+      : DEFAULT_PROMO_SLIDES;
+
+  const currentSlide =
+    promoSlides[activeSlideIndex] || promoSlides[0] || DEFAULT_PROMO_SLIDES[0];
+
+  const isKitchenOpen =
+    typeof isKitchenOpenOverride === 'boolean' ? isKitchenOpenOverride : true;
+
+  const handleSlideAction = (slide: PromoSlide) => {
+    if (slide.actionType === 'category' && slide.categorySlug) {
+      onSelectCategory(slide.categorySlug);
+    } else {
+      onExploreMenu();
+    }
+  };
+
+  // 0. COMPACT FULFILLMENT SELECTOR CARD
+  const fulfillmentCard = (
+    <View key="fulfillment-card" style={styles.fulfillmentCard}>
+      {/* Fulfillment Type Segmented Selector */}
+      <View style={styles.segmentContainer}>
+        <TouchableOpacity
+          style={[
+            styles.segmentTab,
+            isDelivery && styles.segmentTabActiveDelivery,
+          ]}
+          onPress={() => onToggleFulfillmentType && onToggleFulfillmentType('delivery')}
+          activeOpacity={0.8}
+          testID="fulfillment-delivery-btn"
+        >
+          <Text style={styles.segmentIcon}>🛵</Text>
+          <Text
             style={[
-              styles.segmentTab,
-              isDelivery && styles.segmentTabActiveDelivery,
+              styles.segmentLabel,
+              isDelivery && styles.segmentLabelActiveDelivery,
             ]}
-            onPress={() => onToggleFulfillmentType && onToggleFulfillmentType('delivery')}
-            activeOpacity={0.8}
-            testID="fulfillment-delivery-btn"
           >
-            <Text style={styles.segmentIcon}>🛵</Text>
-            <Text
-              style={[
-                styles.segmentLabel,
-                isDelivery && styles.segmentLabelActiveDelivery,
-              ]}
-            >
-              Delivery
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.segmentTab,
-              !isDelivery && styles.segmentTabActivePickup,
-            ]}
-            onPress={() => onToggleFulfillmentType && onToggleFulfillmentType('pickup')}
-            activeOpacity={0.8}
-            testID="fulfillment-pickup-btn"
-          >
-            <Text style={styles.segmentIcon}>🏬</Text>
-            <Text
-              style={[
-                styles.segmentLabel,
-                !isDelivery && styles.segmentLabelActivePickup,
-              ]}
-            >
-              Pickup
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Fulfillment Location Context Bar */}
-        {isDelivery ? (
-          <TouchableOpacity
-            style={styles.locationRow}
-            onPress={onOpenFulfillmentPicker}
-            activeOpacity={0.8}
-            testID="delivery-location-row"
-          >
-            <View style={styles.locationPinCircle}>
-              <Text style={styles.locationPinIcon}>📍</Text>
-            </View>
-            <View style={styles.locationTextContainer}>
-              <Text style={styles.locationHeaderTag}>DELIVERY DESTINATION</Text>
-              <Text style={styles.locationName} numberOfLines={1}>
-                {selectedLandmark ? selectedLandmark.name : 'Select Delivery Landmark'}
-              </Text>
-              <Text style={styles.locationSubtext}>
-                ₦{Brand.fulfillment.campusDeliveryFee} Flat Campus Delivery • ~25–35 mins
-              </Text>
-            </View>
-            <View style={styles.changeActionBadge}>
-              <Text style={styles.changeActionText}>Change ▾</Text>
-            </View>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.locationRow} testID="pickup-location-row">
-            <View style={[styles.locationPinCircle, styles.locationPinCirclePickup]}>
-              <Text style={styles.locationPinIcon}>🏬</Text>
-            </View>
-            <View style={styles.locationTextContainer}>
-              <Text style={[styles.locationHeaderTag, styles.locationHeaderTagPickup]}>
-                PICKUP STAND
-              </Text>
-              <Text style={styles.locationName} numberOfLines={1}>
-                {Brand.location.address}
-              </Text>
-              <Text style={styles.locationSubtext}>
-                Free Pickup • Ready for collection in ~15 mins
-              </Text>
-            </View>
-          </View>
-        )}
-      </View>
-
-      {/* 2. BRAND GREETING & SEARCH BAR */}
-      <View style={styles.greetingSection}>
-        <View style={styles.greetingHeaderRow}>
-          <View style={styles.greetingTextColumn}>
-            <Text style={styles.greetingSubtitle}>Fresh Oven-Baked • UNILAG</Text>
-            <Text style={styles.greetingTitle}>
-              {firstName ? `Hello, ${firstName} 👋` : 'Welcome to AY Pizza 🍕'}
-            </Text>
-          </View>
-          <View style={styles.kitchenStatusBadge}>
-            <View style={styles.statusLiveDot} />
-            <Text style={styles.kitchenStatusText}>Kitchen Open</Text>
-          </View>
-        </View>
+            Delivery
+          </Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.searchBarButton}
-          onPress={onOpenSearch}
-          activeOpacity={0.85}
-          testID="home-search-button"
+          style={[
+            styles.segmentTab,
+            !isDelivery && styles.segmentTabActivePickup,
+          ]}
+          onPress={() => onToggleFulfillmentType && onToggleFulfillmentType('pickup')}
+          activeOpacity={0.8}
+          testID="fulfillment-pickup-btn"
         >
-          <Text style={styles.searchIcon}>🔍</Text>
-          <Text style={styles.searchPlaceholder}>
-            Search pizzas, shakes, toppings, burgers...
+          <Text style={styles.segmentIcon}>🏬</Text>
+          <Text
+            style={[
+              styles.segmentLabel,
+              !isDelivery && styles.segmentLabelActivePickup,
+            ]}
+          >
+            Pickup
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* 3. ACTIVE ORDER LIVE TRACKING STRIP (IF ANY ACTIVE ORDER EXISTS) */}
-      {latestActiveOrder && (
+      {/* Fulfillment Location Context Bar */}
+      {isDelivery ? (
         <TouchableOpacity
-          style={styles.activeOrderCard}
-          onPress={() => onTrackOrder(latestActiveOrder.orderId, latestActiveOrder.receiptToken)}
-          activeOpacity={0.88}
-          testID="active-order-card"
+          style={styles.locationRow}
+          onPress={onOpenFulfillmentPicker}
+          activeOpacity={0.8}
+          testID="delivery-location-row"
         >
-          <View style={styles.activeOrderLeft}>
-            <View style={styles.pulsingIndicator} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.activeOrderTitle}>
-                Order #{latestActiveOrder.orderNumber} in Progress
-              </Text>
-              <Text style={styles.activeOrderSubtitle}>
-                Baking fresh at King Jaja oven • Tap to track live
-              </Text>
-            </View>
+          <View style={styles.locationPinCircle}>
+            <Text style={styles.locationPinIcon}>📍</Text>
           </View>
-          <View style={styles.trackBtn}>
-            <Text style={styles.trackBtnText}>Track Live 📡</Text>
-          </View>
-        </TouchableOpacity>
-      )}
-
-      {/* 4. TASTEFUL BRAND-LED HERO CAMPAIGN (NO FAKE DISCOUNTS) */}
-      <View style={styles.heroCard} testID="brand-hero-card">
-        <Image
-          source={FoodImages.heroBanner}
-          style={styles.heroImage}
-          resizeMode="cover"
-        />
-        <View style={styles.heroOverlay}>
-          <View style={styles.heroBadgeRow}>
-            <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>⚡ STONE-OVEN BAKED</Text>
-            </View>
-            <View style={styles.heroSecondaryBadge}>
-              <Text style={styles.heroSecondaryBadgeText}>Opposite King Jaja</Text>
-            </View>
-          </View>
-
-          <View style={styles.heroCopyBlock}>
-            <Text style={styles.heroTitle}>Artisan Oven-Baked Pizza</Text>
-            <Text style={styles.heroSubtitle}>
-              Proofed dough rolled daily, rich marinara sauce, and 100% melted mozzarella. Baked fresh right on campus.
+          <View style={styles.locationTextContainer}>
+            <Text style={styles.locationHeaderTag}>DELIVERY DESTINATION</Text>
+            <Text style={styles.locationName} numberOfLines={1}>
+              {selectedLandmark ? selectedLandmark.name : 'Select Delivery Landmark'}
+            </Text>
+            <Text style={styles.locationSubtext}>
+              {selectedLandmark
+                ? selectedLandmark.isCampus
+                  ? `₦${selectedLandmark.fee.toLocaleString()} Flat Campus Delivery • ~25–35 mins`
+                  : `₦${selectedLandmark.fee.toLocaleString()} (${selectedLandmark.name}) • ~35–50 mins`
+                : 'Select landmark for delivery fee & timing'}
             </Text>
           </View>
+          <View style={styles.changeActionBadge}>
+            <Text style={styles.changeActionText}>Change ▾</Text>
+          </View>
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.locationRow} testID="pickup-location-row">
+          <View style={[styles.locationPinCircle, styles.locationPinCirclePickup]}>
+            <Text style={styles.locationPinIcon}>🏬</Text>
+          </View>
+          <View style={styles.locationTextContainer}>
+            <Text style={[styles.locationHeaderTag, styles.locationHeaderTagPickup]}>
+              PICKUP STAND
+            </Text>
+            <Text style={styles.locationName} numberOfLines={1}>
+              {Brand.location.address}
+            </Text>
+            <Text style={styles.locationSubtext}>
+              Free Pickup • Ready for collection at King Jaja in ~15 mins
+            </Text>
+          </View>
+        </View>
+      )}
+    </View>
+  );
 
-          <View style={styles.heroFooter}>
-            <TouchableOpacity
-              style={styles.heroActionBtn}
-              onPress={onExploreMenu}
-              activeOpacity={0.85}
-              testID="hero-explore-menu-btn"
-            >
-              <Text style={styles.heroActionText}>Explore Full Menu 🍕</Text>
-            </TouchableOpacity>
+  // 1. BRAND GREETING & SLEEK SEARCH BAR
+  const greetingSection = (
+    <View key="greeting-section" style={styles.greetingSection}>
+      <View style={styles.greetingHeaderRow}>
+        <View style={styles.greetingTextColumn}>
+          <Text style={styles.greetingSubtitle}>Fresh Oven-Baked • UNILAG</Text>
+          <Text style={styles.greetingTitle}>
+            {firstName ? `Hello, ${firstName} 👋` : 'Welcome to AY Pizza 🍕'}
+          </Text>
+        </View>
+        <View style={styles.kitchenStatusBadge}>
+          <View style={[styles.statusLiveDot, !isKitchenOpen && styles.statusClosedDot]} />
+          <Text style={[styles.kitchenStatusText, !isKitchenOpen && styles.kitchenStatusClosedText]}>
+            Kitchen Open
+          </Text>
+        </View>
+      </View>
 
-            <View style={styles.heroPillsRow}>
-              <Text style={styles.heroPillText}>🍕 5 Crust Sizes</Text>
-              <Text style={styles.heroPillDot}>•</Text>
-              <Text style={styles.heroPillText}>🛵 Hostel Delivery</Text>
+      <TouchableOpacity
+        style={styles.searchBarButton}
+        onPress={onOpenSearch}
+        activeOpacity={0.85}
+        testID="home-search-button"
+      >
+        <Text style={styles.searchIcon}>🔍</Text>
+        <Text style={styles.searchPlaceholder}>
+          Search pizzas, shakes, toppings, burgers...
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // 2. ACTIVE ORDER LIVE TRACKING STRIP (IF ANY ACTIVE ORDER EXISTS)
+  const activeOrderCard = latestActiveOrder ? (
+    <TouchableOpacity
+      key="active-order-card"
+      style={styles.activeOrderCard}
+      onPress={() => onTrackOrder(latestActiveOrder.orderId, latestActiveOrder.receiptToken)}
+      activeOpacity={0.88}
+      testID="active-order-card"
+    >
+      <View style={styles.activeOrderLeft}>
+        <View style={styles.pulsingIndicator} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.activeOrderTitle}>
+            Order #{latestActiveOrder.orderNumber} in Progress
+          </Text>
+          <Text style={styles.activeOrderSubtitle}>
+            Baking fresh at King Jaja oven • Tap to track live
+          </Text>
+        </View>
+      </View>
+      <View style={styles.trackBtn}>
+        <Text style={styles.trackBtnText}>Track Live 📡</Text>
+      </View>
+    </TouchableOpacity>
+  ) : null;
+
+  // 3. FOOD-FIRST HERO SECTION (NO DARK SCRIM, VIBRANT FOOD PHOTOGRAPHY)
+  const heroCard = (
+    <View key="brand-hero-card" style={styles.heroCard} testID="brand-hero-card">
+      <Image
+        source={currentSlide.image}
+        style={styles.heroImage}
+        resizeMode="cover"
+      />
+
+      <View style={styles.heroOverlay}>
+        <View style={styles.heroBadgeRow}>
+          <View style={styles.heroBadge}>
+            <Text style={styles.heroBadgeText}>{currentSlide.badge}</Text>
+          </View>
+          {currentSlide.secondaryBadge ? (
+            <View style={styles.heroSecondaryBadge}>
+              <Text style={styles.heroSecondaryBadgeText}>{currentSlide.secondaryBadge}</Text>
             </View>
+          ) : null}
+        </View>
+
+        <View style={styles.heroCopyBlock}>
+          <Text style={styles.heroTitle}>{currentSlide.title}</Text>
+          <Text style={styles.heroSubtitle}>
+            {currentSlide.subtitle}
+          </Text>
+        </View>
+
+        <View style={styles.heroFooter}>
+          <TouchableOpacity
+            style={styles.heroActionBtn}
+            onPress={() => handleSlideAction(currentSlide)}
+            activeOpacity={0.85}
+            testID="hero-explore-menu-btn"
+          >
+            <Text style={styles.heroActionText}>{currentSlide.actionText}</Text>
+          </TouchableOpacity>
+
+          <View style={styles.heroPillsRow}>
+            {currentSlide.pills.map((pill, idx) => (
+              <Text
+                key={idx}
+                style={pill === '•' ? styles.heroPillDot : styles.heroPillText}
+              >
+                {pill}
+              </Text>
+            ))}
           </View>
         </View>
       </View>
 
-      {/* 5. FOOD CATEGORIES SCROLLER */}
-      <View style={styles.sectionHeaderRow}>
-        <View>
-          <Text style={styles.sectionTitle}>Explore Categories</Text>
-          <Text style={styles.sectionSubtitle}>Select a section to view menu items</Text>
+      {/* Carousel Pagination Dots */}
+      {promoSlides.length > 1 && (
+        <View style={styles.carouselPaginationDots} testID="promo-pagination-dots">
+          {promoSlides.map((slide, idx) => (
+            <TouchableOpacity
+              key={slide.id}
+              style={[
+                styles.paginationDot,
+                idx === activeSlideIndex ? styles.paginationDotActive : styles.paginationDotInactive,
+              ]}
+              onPress={() => onSelectSlide && onSelectSlide(idx)}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+              testID={`promo-dot-${idx}`}
+            />
+          ))}
         </View>
-        <TouchableOpacity onPress={onExploreMenu} activeOpacity={0.7}>
-          <Text style={styles.viewAllText}>Full Menu →</Text>
+      )}
+    </View>
+  );
+
+  // 4. FOOD CATEGORIES SECTION HEADER
+  const categoriesHeader = (
+    <View key="categories-header" style={styles.sectionHeaderRow}>
+      <View>
+        <Text style={styles.sectionTitle}>Explore Categories</Text>
+        <Text style={styles.sectionSubtitle}>Select a section to view menu items</Text>
+      </View>
+      <TouchableOpacity onPress={onExploreMenu} activeOpacity={0.7}>
+        <Text style={styles.viewAllText}>Full Menu →</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // 5. FOOD CATEGORIES SCROLLER
+  const categoriesScroll = (
+    <ScrollView
+      key="categories-scroll"
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.categoriesScroll}
+      testID="home-categories-scroll"
+    >
+      <TouchableOpacity
+        style={[
+          styles.categoryPill,
+          normalizeCategorySlug(selectedCategorySlug) === 'all' ? styles.categoryPillActive : styles.categoryPillInactive,
+        ]}
+        onPress={() => onSelectCategory('all')}
+        activeOpacity={0.8}
+        hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+      >
+        <Text style={styles.categoryEmoji}>🍽️</Text>
+        <Text
+          style={[
+            styles.categoryLabel,
+            normalizeCategorySlug(selectedCategorySlug) === 'all' && styles.categoryLabelActive,
+          ]}
+        >
+          All Menu
+        </Text>
+      </TouchableOpacity>
+
+      {categories.map((cat) => {
+        const isSelected = normalizeCategorySlug(selectedCategorySlug) === normalizeCategorySlug(cat.slug);
+        let emoji = '🍕';
+        const norm = normalizeCategorySlug(cat.slug);
+        if (norm === 'icecream') emoji = '🍨';
+        else if (norm === 'fastfood') emoji = '🍔';
+        else if (norm === 'drinks') emoji = '🥤';
+
+        return (
+          <TouchableOpacity
+            key={cat.id}
+            style={[
+              styles.categoryPill,
+              isSelected ? styles.categoryPillActive : styles.categoryPillInactive,
+            ]}
+            onPress={() => onSelectCategory(cat.slug)}
+            activeOpacity={0.8}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          >
+            <Text style={styles.categoryEmoji}>{emoji}</Text>
+            <Text
+              style={[
+                styles.categoryLabel,
+                isSelected && styles.categoryLabelActive,
+              ]}
+            >
+              {cat.name}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  );
+
+  // 6. FEATURED MENU / CAMPUS BESTSELLERS SECTION HEADER
+  const featuredHeader = (
+    <View key="featured-header" style={[styles.sectionHeaderRow, { marginTop: 14 }]}>
+      <View>
+        <Text style={styles.sectionTitle}>
+          {selectedCategorySlug === 'all'
+            ? 'Campus Bestsellers 🔥'
+            : `${categories.find((c) => c.slug === selectedCategorySlug)?.name || 'Featured Items'} 🍕`}
+        </Text>
+        <Text style={styles.sectionSubtitle}>
+          Freshly prepared to order right at King Jaja stand
+        </Text>
+      </View>
+      <TouchableOpacity onPress={onExploreMenu} activeOpacity={0.7}>
+        <Text style={styles.viewAllText}>View All →</Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  // 7. SHELF 1: CAMPUS BESTSELLERS (HORIZONTAL SWIPEABLE 230dp CARDS)
+  const productGrid = (
+    <ScrollView
+      key="home-product-grid"
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.horizontalShelfContent}
+      testID="home-product-grid"
+    >
+      {displayedProducts.map((prod) => {
+        const foodImg = getProductImage(prod);
+        const hasSizes = prod.sizes && prod.sizes.length > 0;
+        const isAvailable = prod.isAvailable;
+        const culinaryBadge = getCulinaryBadge(prod);
+
+        return (
+          <TouchableOpacity
+            key={prod.id}
+            style={[styles.shelfCard, !isAvailable && styles.shelfCardUnavailable]}
+            onPress={() => onOpenProductDetail(prod)}
+            activeOpacity={0.88}
+            testID={`product-card-${prod.id}`}
+          >
+            <View style={styles.shelfImageContainer}>
+              <Image source={foodImg} style={styles.shelfProductImage} resizeMode="cover" />
+              {isAvailable ? (
+                <View style={styles.stockBadge}>
+                  <Text style={styles.stockBadgeText}>In Stock</Text>
+                </View>
+              ) : (
+                <View style={styles.outOfStockBadge}>
+                  <Text style={styles.outOfStockBadgeText}>Sold Out</Text>
+                </View>
+              )}
+              {culinaryBadge && isAvailable && (
+                <View style={styles.culinaryBadge}>
+                  <Text style={styles.culinaryBadgeText}>
+                    {culinaryBadge.icon} {culinaryBadge.label}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.shelfCardBody}>
+              <View>
+                <Text style={styles.shelfProductTitle} numberOfLines={1}>
+                  {prod.name}
+                </Text>
+                <Text style={styles.shelfProductDesc} numberOfLines={1}>
+                  {prod.description}
+                </Text>
+              </View>
+
+              <View style={styles.shelfCardFooter}>
+                <View style={styles.priceContainer}>
+                  <Text style={styles.pricePrefix}>
+                    {hasSizes ? 'From' : 'Price'}
+                  </Text>
+                  <Text style={styles.priceValue} numberOfLines={1}>
+                    ₦{prod.basePrice.toLocaleString()}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.productActionBtn,
+                    !isAvailable && styles.productActionBtnDisabled,
+                    hasSizes ? styles.productActionBtnCustomize : styles.productActionBtnAdd,
+                  ]}
+                  onPress={() => onOpenCustomizer(prod)}
+                  disabled={!isAvailable}
+                  activeOpacity={0.8}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  testID={`add-btn-${prod.id}`}
+                >
+                  <Text
+                    style={[
+                      styles.productActionBtnText,
+                      hasSizes ? styles.productActionBtnTextRed : styles.productActionBtnTextYellow,
+                    ]}
+                  >
+                    {!isAvailable ? 'Unavailable' : hasSizes ? 'Customize ⚙️' : '+ Add'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  );
+
+  // SHELF 2: CREAMY SHAKES & CONES (DEDICATED DESSERT SHELF)
+  const hasDessertShelf = dessertProducts.length > 0 && selectedCategorySlug === 'all';
+  const dessertShelf = hasDessertShelf ? (
+    <View key="dessert-shelf-container" style={styles.dessertShelfContainer}>
+      <View style={[styles.sectionHeaderRow, { marginTop: 18 }]}>
+        <View>
+          <Text style={styles.sectionTitle}>Creamy Shakes & Cones 🍨</Text>
+          <Text style={styles.sectionSubtitle}>
+            Thick hand-spun milkshakes & 100% real dairy soft-serve
+          </Text>
+        </View>
+        <TouchableOpacity onPress={() => onSelectCategory('icecream')} activeOpacity={0.7}>
+          <Text style={styles.viewAllText}>View All 🍨 →</Text>
         </TouchableOpacity>
       </View>
-
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categoriesScroll}
-        testID="home-categories-scroll"
+        contentContainerStyle={styles.horizontalShelfContent}
+        testID="home-shakes-shelf"
       >
-        <TouchableOpacity
-          style={[
-            styles.categoryPill,
-            selectedCategorySlug === 'all' ? styles.categoryPillActive : styles.categoryPillInactive,
-          ]}
-          onPress={() => onSelectCategory('all')}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.categoryEmoji}>🍽️</Text>
-          <Text
-            style={[
-              styles.categoryLabel,
-              selectedCategorySlug === 'all' && styles.categoryLabelActive,
-            ]}
-          >
-            All Menu
-          </Text>
-        </TouchableOpacity>
-
-        {categories.map((cat) => {
-          const isSelected = selectedCategorySlug === cat.slug;
-          let emoji = '🍕';
-          if (cat.slug.includes('shake') || cat.slug.includes('icecream')) emoji = '🍨';
-          else if (cat.slug.includes('fast') || cat.slug.includes('burger')) emoji = '🍔';
-          else if (cat.slug.includes('drink')) emoji = '🥤';
-
-          return (
-            <TouchableOpacity
-              key={cat.id}
-              style={[
-                styles.categoryPill,
-                isSelected ? styles.categoryPillActive : styles.categoryPillInactive,
-              ]}
-              onPress={() => onSelectCategory(cat.slug)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.categoryEmoji}>{emoji}</Text>
-              <Text
-                style={[
-                  styles.categoryLabel,
-                  isSelected && styles.categoryLabelActive,
-                ]}
-              >
-                {cat.name}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-
-      {/* 6. FEATURED MENU / CAMPUS FAVOURITES */}
-      <View style={[styles.sectionHeaderRow, { marginTop: 18 }]}>
-        <View>
-          <Text style={styles.sectionTitle}>
-            {selectedCategorySlug === 'all'
-              ? 'Campus Favourites 🔥'
-              : `${categories.find((c) => c.slug === selectedCategorySlug)?.name || 'Featured Items'} 🍕`}
-          </Text>
-          <Text style={styles.sectionSubtitle}>
-            Freshly prepared to order right at King Jaja stand
-          </Text>
-        </View>
-        <TouchableOpacity onPress={onExploreMenu} activeOpacity={0.7}>
-          <Text style={styles.viewAllText}>View All →</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.productGrid} testID="home-product-grid">
-        {displayedProducts.map((prod) => {
+        {dessertProducts.map((prod) => {
           const foodImg = getProductImage(prod);
           const hasSizes = prod.sizes && prod.sizes.length > 0;
           const isAvailable = prod.isAvailable;
+          const culinaryBadge = getCulinaryBadge(prod);
 
           return (
             <TouchableOpacity
-              key={prod.id}
-              style={[styles.productCard, !isAvailable && styles.productCardUnavailable]}
+              key={`dessert-${prod.id}`}
+              style={[styles.shelfCard, !isAvailable && styles.shelfCardUnavailable]}
               onPress={() => onOpenProductDetail(prod)}
               activeOpacity={0.88}
-              testID={`product-card-${prod.id}`}
+              testID={`shake-card-${prod.id}`}
             >
-              <View style={styles.productImageContainer}>
-                <Image source={foodImg} style={styles.productImage} resizeMode="cover" />
+              <View style={styles.shelfImageContainer}>
+                <Image source={foodImg} style={styles.shelfProductImage} resizeMode="cover" />
                 {isAvailable ? (
                   <View style={styles.stockBadge}>
                     <Text style={styles.stockBadgeText}>In Stock</Text>
@@ -371,19 +641,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     <Text style={styles.outOfStockBadgeText}>Sold Out</Text>
                   </View>
                 )}
+                {culinaryBadge && isAvailable && (
+                  <View style={styles.culinaryBadge}>
+                    <Text style={styles.culinaryBadgeText}>
+                      {culinaryBadge.icon} {culinaryBadge.label}
+                    </Text>
+                  </View>
+                )}
               </View>
 
-              <View style={styles.productCardBody}>
+              <View style={styles.shelfCardBody}>
                 <View>
-                  <Text style={styles.productTitle} numberOfLines={1}>
+                  <Text style={styles.shelfProductTitle} numberOfLines={1}>
                     {prod.name}
                   </Text>
-                  <Text style={styles.productDesc} numberOfLines={2}>
+                  <Text style={styles.shelfProductDesc} numberOfLines={1}>
                     {prod.description}
                   </Text>
                 </View>
 
-                <View style={styles.productCardFooter}>
+                <View style={styles.shelfCardFooter}>
                   <View style={styles.priceContainer}>
                     <Text style={styles.pricePrefix}>
                       {hasSizes ? 'From' : 'Price'}
@@ -402,7 +679,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     onPress={() => onOpenCustomizer(prod)}
                     disabled={!isAvailable}
                     activeOpacity={0.8}
-                    testID={`add-btn-${prod.id}`}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    testID={`add-shake-btn-${prod.id}`}
                   >
                     <Text
                       style={[
@@ -418,57 +696,99 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
+    </View>
+  ) : null;
 
-      {/* 7. UNILAG CAMPUS TRUST & OPERATIONAL INFO */}
-      <View style={styles.campusTrustCard} testID="campus-trust-card">
-        <View style={styles.campusTrustHeader}>
-          <Text style={styles.campusTrustEmoji}>🏛️</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.campusTrustTitle}>AY Pizza UNILAG Campus Stand</Text>
-            <Text style={styles.campusTrustSubtitle}>
-              Fresh oven-baked artisan pizza, thick shakes & fast hostel delivery
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.campusDivider} />
-
-        <View style={styles.campusInfoGrid}>
-          <View style={styles.campusInfoItem}>
-            <Text style={styles.campusInfoIcon}>📍</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.campusInfoLabel}>Location</Text>
-              <Text style={styles.campusInfoValue}>{Brand.location.address}</Text>
-            </View>
-          </View>
-
-          <View style={styles.campusInfoItem}>
-            <Text style={styles.campusInfoIcon}>⏰</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.campusInfoLabel}>Hours</Text>
-              <Text style={styles.campusInfoValue}>10:00 AM – 9:00 PM WAT (Daily)</Text>
-            </View>
-          </View>
-
-          <View style={styles.campusInfoItem}>
-            <Text style={styles.campusInfoIcon}>📞</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.campusInfoLabel}>Direct Line / WhatsApp</Text>
-              <Text style={styles.campusInfoValue}>{Brand.contact.phone}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.hostelNoticeBox}>
-          <Text style={styles.hostelNoticeText}>
-            🛵 Prompt hostel delivery across King Jaja, Mariere, Moremi, Madam Tinubu, Biobaku, El-Kanemi, and all UNILAG faculties.
+  // 8. UNILAG CAMPUS TRUST & OPERATIONAL INFO
+  const campusTrustCard = (
+    <View key="campus-trust-card" style={styles.campusTrustCard} testID="campus-trust-card">
+      <View style={styles.campusTrustHeader}>
+        <Text style={styles.campusTrustEmoji}>🏛️</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.campusTrustTitle}>AY Pizza UNILAG Campus Stand</Text>
+          <Text style={styles.campusTrustSubtitle}>
+            Fresh oven-baked artisan pizza, thick shakes & fast hostel delivery
           </Text>
         </View>
       </View>
 
-      {/* Bottom spacer ensuring clearance over bottom tab bar */}
-      <View style={{ height: 32 }} />
+      <View style={styles.campusDivider} />
+
+      <View style={styles.campusInfoGrid}>
+        <View style={styles.campusInfoItem}>
+          <Text style={styles.campusInfoIcon}>📍</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.campusInfoLabel}>Location</Text>
+            <Text style={styles.campusInfoValue}>{Brand.location.address}</Text>
+          </View>
+        </View>
+
+        <View style={styles.campusInfoItem}>
+          <Text style={styles.campusInfoIcon}>⏰</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.campusInfoLabel}>Hours</Text>
+            <Text style={styles.campusInfoValue}>10:00 AM – 9:00 PM WAT (Daily)</Text>
+          </View>
+        </View>
+
+        <View style={styles.campusInfoItem}>
+          <Text style={styles.campusInfoIcon}>📞</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.campusInfoLabel}>Direct Line / WhatsApp</Text>
+            <Text style={styles.campusInfoValue}>{Brand.contact.phone}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.hostelNoticeBox}>
+        <Text style={styles.hostelNoticeText}>
+          🛵 Prompt hostel delivery across King Jaja, Mariere, Moremi, Madam Tinubu, Biobaku, El-Kanemi, and all UNILAG faculties.
+        </Text>
+      </View>
+    </View>
+  );
+
+  // Bottom spacer
+  const bottomSpacer = <View key="bottom-spacer" style={{ height: 28 }} />;
+
+  // Assembling children array to preserve exact child indices for unit test suites:
+  // indices 0..7 are fixed slots:
+  // [0]: fulfillmentCard
+  // [1]: greetingSection
+  // [2]: activeOrderCard (or null)
+  // [3]: heroCard
+  // [4]: categoriesHeader
+  // [5]: categoriesScroll
+  // [6]: featuredHeader
+  // [7]: productGrid (Shelf 1)
+  // When no dessert shelf (e.g. in test suite where allProducts is []), [8] is campusTrustCard.
+  // When dessert shelf is active, [8] is dessertShelf and [9] is campusTrustCard.
+  const contentChildren = [
+    fulfillmentCard,
+    greetingSection,
+    activeOrderCard,
+    heroCard,
+    categoriesHeader,
+    categoriesScroll,
+    featuredHeader,
+    productGrid,
+  ];
+
+  if (dessertShelf) {
+    contentChildren.push(dessertShelf);
+  }
+  contentChildren.push(campusTrustCard);
+  contentChildren.push(bottomSpacer);
+
+  return (
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+      testID="home-screen-scroll"
+    >
+      {contentChildren}
     </ScrollView>
   );
 };
@@ -479,16 +799,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.warmCream,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 32,
+    padding: 14,
+    paddingBottom: 90,
   },
 
-  // 1. FULFILLMENT SELECTOR CARD
+  // 1. COMPACT FULFILLMENT SELECTOR CARD
   fulfillmentCard: {
     backgroundColor: Colors.cardWhite,
     borderRadius: Radius.lg,
-    padding: 12,
-    marginBottom: 14,
+    padding: 10,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: Colors.borderLight,
     ...Shadows.card,
@@ -497,17 +817,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: Colors.surfaceCream,
     borderRadius: Radius.pill,
-    padding: 3,
-    marginBottom: 10,
+    padding: 2,
+    marginBottom: 8,
   },
   segmentTab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 7,
+    paddingVertical: 5,
     borderRadius: Radius.pill,
-    gap: 6,
+    gap: 5,
   },
   segmentTabActiveDelivery: {
     backgroundColor: Colors.primaryRed,
@@ -518,7 +838,7 @@ const styles = StyleSheet.create({
     ...Shadows.card,
   },
   segmentIcon: {
-    fontSize: 14,
+    fontSize: 13,
   },
   segmentLabel: {
     fontSize: 12,
@@ -536,28 +856,28 @@ const styles = StyleSheet.create({
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: 2,
     paddingHorizontal: 2,
   },
   locationPinCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: Colors.softTomato,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 8,
   },
   locationPinCirclePickup: {
     backgroundColor: 'rgba(40, 122, 75, 0.12)',
   },
   locationPinIcon: {
-    fontSize: 16,
+    fontSize: 14,
   },
   locationTextContainer: {
     flex: 1,
     minWidth: 0,
-    marginRight: 8,
+    marginRight: 6,
   },
   locationHeaderTag: {
     fontSize: 9,
@@ -581,8 +901,8 @@ const styles = StyleSheet.create({
   },
   changeActionBadge: {
     backgroundColor: Colors.warmCream,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: Colors.borderLight,
@@ -595,38 +915,38 @@ const styles = StyleSheet.create({
 
   // 2. GREETING & SEARCH
   greetingSection: {
-    marginBottom: 14,
+    marginBottom: 10,
   },
   greetingHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   greetingTextColumn: {
     flex: 1,
-    marginRight: 10,
+    marginRight: 8,
   },
   greetingSubtitle: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: Colors.primaryRed,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
   greetingTitle: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '900',
     color: Colors.charcoal,
-    marginTop: 2,
+    marginTop: 1,
     letterSpacing: -0.3,
   },
   kitchenStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(40, 122, 75, 0.1)',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: Radius.pill,
     borderWidth: 1,
     borderColor: 'rgba(40, 122, 75, 0.25)',
@@ -638,28 +958,34 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.freshGreen,
     marginRight: 5,
   },
+  statusClosedDot: {
+    backgroundColor: Colors.textMuted,
+  },
   kitchenStatusText: {
     fontSize: 10,
     fontWeight: '800',
     color: Colors.freshGreen,
+  },
+  kitchenStatusClosedText: {
+    color: Colors.textMuted,
   },
   searchBarButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.cardWhite,
     borderRadius: Radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
     borderWidth: 1,
     borderColor: Colors.borderLight,
     ...Shadows.card,
   },
   searchIcon: {
-    fontSize: 16,
-    marginRight: 10,
+    fontSize: 15,
+    marginRight: 8,
   },
   searchPlaceholder: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.textMuted,
     fontWeight: '500',
     flex: 1,
@@ -672,8 +998,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: Colors.cardWhite,
     borderRadius: Radius.md,
-    padding: 12,
-    marginBottom: 14,
+    padding: 10,
+    marginBottom: 10,
     borderLeftWidth: 4,
     borderLeftColor: Colors.primaryRed,
     borderWidth: 1,
@@ -684,43 +1010,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginRight: 10,
+    marginRight: 8,
   },
   pulsingIndicator: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: Colors.freshGreen,
-    marginRight: 10,
+    marginRight: 8,
   },
   activeOrderTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     color: Colors.charcoal,
   },
   activeOrderSubtitle: {
-    fontSize: 11,
+    fontSize: 10,
     color: Colors.textSecondary,
-    marginTop: 2,
+    marginTop: 1,
   },
   trackBtn: {
     backgroundColor: Colors.primaryRed,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
     borderRadius: Radius.sm,
   },
   trackBtnText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
   },
 
-  // 4. BRAND CAMPAIGN HERO
+  // 4. FOOD-FIRST HERO SECTION (NO DARK SCRIM)
   heroCard: {
-    height: 200,
-    borderRadius: Radius.xl,
+    height: 136,
+    borderRadius: Radius.lg,
     overflow: 'hidden',
-    marginBottom: 18,
+    marginBottom: 12,
     backgroundColor: Colors.charcoal,
     position: 'relative',
     ...Shadows.card,
@@ -731,92 +1057,116 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
-    opacity: 0.65,
+    opacity: 1,
   },
   heroOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(39, 33, 31, 0.48)',
-    padding: 16,
+    padding: 12,
     justifyContent: 'space-between',
+    backgroundColor: 'rgba(20, 10, 5, 0.28)',
   },
   heroBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   heroBadge: {
     backgroundColor: Colors.goldenYellow,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
     borderRadius: Radius.xs,
   },
   heroBadgeText: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '900',
     color: Colors.charcoal,
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   heroSecondaryBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
     borderRadius: Radius.xs,
   },
   heroSecondaryBadgeText: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '800',
     color: '#FFFFFF',
   },
   heroCopyBlock: {
-    marginTop: 4,
+    marginTop: 2,
   },
   heroTitle: {
-    fontSize: 21,
+    fontSize: 16,
     fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   heroSubtitle: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#FFF8EC',
-    lineHeight: 16,
+    lineHeight: 14,
     fontWeight: '500',
-    marginTop: 4,
-    maxWidth: '95%',
+    marginTop: 2,
+    maxWidth: '92%',
   },
   heroFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 4,
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
   heroActionBtn: {
     backgroundColor: Colors.primaryRed,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: Radius.pill,
     ...Shadows.hover,
   },
   heroActionText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
   },
   heroPillsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
   },
   heroPillText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     color: '#FFF3DD',
   },
   heroPillDot: {
-    fontSize: 10,
+    fontSize: 9,
     color: 'rgba(255, 255, 255, 0.6)',
+  },
+  carouselPaginationDots: {
+    position: 'absolute',
+    bottom: 4,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
+  paginationDot: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#FFFFFF',
+  },
+  paginationDotActive: {
+    width: 14,
+    backgroundColor: Colors.goldenYellow,
+    opacity: 1,
+  },
+  paginationDotInactive: {
+    width: 4,
+    opacity: 0.45,
   },
 
   // 5. CATEGORIES
@@ -824,17 +1174,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '900',
     color: Colors.charcoal,
   },
   sectionSubtitle: {
     fontSize: 11,
     color: Colors.textSecondary,
-    marginTop: 2,
+    marginTop: 1,
   },
   viewAllText: {
     fontSize: 12,
@@ -842,16 +1192,17 @@ const styles = StyleSheet.create({
     color: Colors.primaryRed,
   },
   categoriesScroll: {
-    paddingRight: 10,
+    paddingRight: 8,
     gap: 8,
     paddingVertical: 2,
-    marginBottom: 14,
+    marginBottom: 10,
   },
   categoryPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 9,
-    paddingHorizontal: 14,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    minHeight: 40,
     borderRadius: Radius.pill,
     ...Shadows.card,
   },
@@ -866,8 +1217,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.primaryRed,
   },
   categoryEmoji: {
-    fontSize: 16,
-    marginRight: 6,
+    fontSize: 14,
+    marginRight: 5,
   },
   categoryLabel: {
     fontSize: 12,
@@ -879,29 +1230,31 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  // 6. FEATURED MENU GRID
-  productGrid: {
+  // 6. HORIZONTAL PRODUCT DISCOVERY SHELVES
+  horizontalShelfContent: {
     gap: 12,
+    paddingVertical: 2,
+    paddingRight: 10,
   },
-  productCard: {
+  shelfCard: {
+    width: 230,
     backgroundColor: Colors.cardWhite,
     borderRadius: Radius.lg,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: Colors.borderLight,
     ...Shadows.card,
-    flexDirection: 'row',
   },
-  productCardUnavailable: {
+  shelfCardUnavailable: {
     opacity: 0.6,
   },
-  productImageContainer: {
-    width: 96,
-    height: 96,
+  shelfImageContainer: {
+    width: '100%',
+    height: 124,
     position: 'relative',
     backgroundColor: Colors.surfaceCream,
   },
-  productImage: {
+  shelfProductImage: {
     width: '100%',
     height: '100%',
   },
@@ -935,29 +1288,41 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textTransform: 'uppercase',
   },
-  productCardBody: {
-    flex: 1,
+  culinaryBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: 'rgba(39, 33, 31, 0.88)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.xs,
+  },
+  culinaryBadgeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#FFF8EC',
+  },
+  shelfCardBody: {
     padding: 10,
     justifyContent: 'space-between',
-    minWidth: 0,
+    minHeight: 88,
   },
-  productTitle: {
-    fontSize: 14,
+  shelfProductTitle: {
+    fontSize: 13,
     fontWeight: '800',
     color: Colors.charcoal,
   },
-  productDesc: {
+  shelfProductDesc: {
     fontSize: 11,
     color: Colors.textSecondary,
-    lineHeight: 15,
+    lineHeight: 14,
     marginTop: 2,
   },
-  productCardFooter: {
+  shelfCardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 8,
-    flexWrap: 'wrap',
     gap: 6,
   },
   priceContainer: {
@@ -972,11 +1337,12 @@ const styles = StyleSheet.create({
   },
   priceValue: {
     ...Typography.pricePrimary,
-    fontSize: 15,
+    fontSize: 14,
   },
   productActionBtn: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
+    minHeight: 36,
     borderRadius: Radius.pill,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1003,12 +1369,18 @@ const styles = StyleSheet.create({
     color: Colors.charcoal,
   },
 
-  // 7. CAMPUS TRUST CARD
+  // 7. DESSERT SHELF CONTAINER
+  dessertShelfContainer: {
+    marginBottom: 8,
+  },
+
+  // 8. CAMPUS TRUST CARD
   campusTrustCard: {
     backgroundColor: Colors.cardWhite,
     borderRadius: Radius.lg,
-    padding: 16,
-    marginTop: 22,
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: Colors.borderLight,
     ...Shadows.card,
@@ -1016,63 +1388,64 @@ const styles = StyleSheet.create({
   campusTrustHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 8,
   },
   campusTrustEmoji: {
-    fontSize: 28,
-    marginRight: 10,
+    fontSize: 20,
+    marginRight: 8,
   },
   campusTrustTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
     color: Colors.charcoal,
   },
   campusTrustSubtitle: {
     fontSize: 11,
     color: Colors.textSecondary,
-    marginTop: 2,
-    lineHeight: 15,
+    marginTop: 1,
   },
   campusDivider: {
     height: 1,
     backgroundColor: Colors.borderLight,
-    marginVertical: 12,
+    marginVertical: 8,
   },
   campusInfoGrid: {
-    gap: 8,
+    gap: 6,
   },
   campusInfoItem: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   campusInfoIcon: {
-    fontSize: 14,
+    fontSize: 13,
     marginRight: 8,
-    marginTop: 1,
+    width: 18,
+    textAlign: 'center',
   },
   campusInfoLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     color: Colors.textMuted,
     textTransform: 'uppercase',
   },
   campusInfoValue: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: Colors.charcoal,
     marginTop: 1,
   },
   hostelNoticeBox: {
-    backgroundColor: Colors.surfaceCream,
+    backgroundColor: Colors.warmCream,
     borderRadius: Radius.sm,
-    padding: 10,
-    marginTop: 12,
+    padding: 8,
+    marginTop: 10,
     borderWidth: 1,
-    borderColor: 'rgba(244, 179, 35, 0.3)',
+    borderColor: Colors.borderLight,
   },
   hostelNoticeText: {
-    fontSize: 11,
-    color: Colors.charcoal,
-    lineHeight: 16,
+    fontSize: 10,
+    color: Colors.chocolateBrown,
+    lineHeight: 14,
     fontWeight: '600',
   },
 });
